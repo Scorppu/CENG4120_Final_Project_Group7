@@ -15,12 +15,27 @@ This project implements an FPGA router using the PathFinder algorithm with optim
 
 ### Project Structure
 
-The project is organized in a modular way:
+The project is organized with a clean separation of interfaces and implementations:
 
-- `input.h/cpp`: Data structures and input parsing functions
-- `router.h/cpp`: PathFinder algorithm implementation
-- `output.h/cpp`: Output generation and statistics
-- `main.cpp`: Program entry point and coordination
+- `src/` - Source code directory
+  - `main.cpp` - Program entry point
+  - `Interface/` - Header files (.hpp)
+    - `Reader.hpp` - Input parsing declarations
+    - `Router.hpp` - Routing algorithm declarations
+    - `Writer.hpp` - Output generation declarations
+  - `Reader/` - Input implementation
+    - `STReader.cpp` - Standard reader implementation
+  - `Router/` - Routing implementation
+    - `router.cpp` - PathFinder algorithm implementation
+  - `Writer/` - Output implementation
+    - `output.cpp` - Result writing implementation
+
+- `data/` - Data directory
+  - `benchmarks/` - Contains netlist files for testing
+  - `results/` - Directory for routing results
+
+- `docs/` - Documentation files
+  - `CENG4120-Final-FPGA Routing.docx` - Assignment description
 
 ### Building the Router
 
