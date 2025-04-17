@@ -1,0 +1,39 @@
+CENG4120_Final_Project_Group7/
+├── include/              # Header files directory
+│   ├── input.h           # Data structures and input parsing declarations
+│   ├── router.h          # Routing algorithm declarations
+│   └── output.h          # Output generation declarations
+│
+├── main.cpp              # Main program entry point
+├── input.cpp             # Implementation of input handling
+├── router.cpp            # Implementation of routing algorithm
+├── output.cpp            # Implementation of output generation
+├── Makefile              # Build configuration
+├── README.md             # Project documentation
+├── fpga_router           # Executable (generated after build)
+├── PROJECT_STRUCTURE.txt # This file
+│
+├── data/                 # Data directory (suggested organization)
+│   ├── xcvu3p.device     # FPGA device description
+│   │
+│   ├── benchmarks/       # Benchmark designs
+│   │   ├── design1.netlist
+│   │   ├── design2.netlist
+│   │   ├── design3.netlist
+│   │   ├── design4.netlist
+│   │   └── design5.netlist
+│   │
+│   └── results/          # Routing results
+│       ├── design1.route
+│       ├── design2.route
+│       ├── design3.route
+│       ├── design4.route
+│       └── design5.route
+│
+└── docs/                 # Additional documentation (suggested)
+    └── FPGA-Routing.docx # Assignment description
+
+Notes:
+- Files with names like 'fpga_router', '*.o', and 'design*.route' are generated when building and running the program
+- The data/ and docs/ directories are suggested for organization and may not exist yet
+- The actual paths to device files and benchmarks may vary depending on where you extract them 

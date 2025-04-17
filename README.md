@@ -13,6 +13,15 @@ This project implements an FPGA router using the PathFinder algorithm with optim
 - Prioritized net routing based on complexity
 - Automatic timeout handling to meet time limits
 
+### Project Structure
+
+The project is organized in a modular way:
+
+- `input.h/cpp`: Data structures and input parsing functions
+- `router.h/cpp`: PathFinder algorithm implementation
+- `output.h/cpp`: Output generation and statistics
+- `main.cpp`: Program entry point and coordination
+
 ### Building the Router
 
 To compile the router, simply run:
