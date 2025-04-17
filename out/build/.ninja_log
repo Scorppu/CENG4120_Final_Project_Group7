@@ -1,0 +1,15 @@
+# ninja log v6
+1	9	7665937888030408	clean	139b443fbd37261f
+31	444	7665965846591351	CMakeFiles/FPGA_Router.dir/src/Writer/output.cpp.obj	a9452269973df2bb
+3	509	7665956901675725	CMakeFiles/FPGA_Router.dir/src/main.cpp.obj	24840984ab2b3eac
+27	1226	7665965846546296	CMakeFiles/FPGA_Router.dir/src/Router/router.cpp.obj	eaf8960d8ba8abb4
+1	187	7665987552139612	build.ninja	cb142df8d1df8058
+12	801	7665965846396059	CMakeFiles/FPGA_Router.dir/src/Reader/STReader.cpp.obj	1c2f24d3d60303f4
+1228	1378	7665965858545694	FPGA_Router.exe	868bdd5d2fb55b53
+1	10	7665987625308278	clean	139b443fbd37261f
+33	460	7665987665923467	CMakeFiles/FPGA_Router.dir/src/Writer/output.cpp.obj	a9452269973df2bb
+9	488	7665987665683239	CMakeFiles/FPGA_Router.dir/src/main.cpp.obj	24840984ab2b3eac
+25	812	7665987665848382	CMakeFiles/FPGA_Router.dir/src/Reader/STReader.cpp.obj	1c2f24d3d60303f4
+29	1254	7665987665883460	CMakeFiles/FPGA_Router.dir/src/Router/router.cpp.obj	eaf8960d8ba8abb4
+1256	1413	7665987678148074	FPGA_Router.exe	868bdd5d2fb55b53
+1	14	7665996671062353	clean	139b443fbd37261f

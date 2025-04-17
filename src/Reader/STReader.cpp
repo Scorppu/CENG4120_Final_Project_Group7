@@ -1,11 +1,11 @@
-#include "include/Reader.hpp"
+#include "../Interface/Reader.hpp"
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <vector>
 
 // After input.h include, now include router.h
-#include "include/Router.hpp"
+#include "../Interface/router.hpp"
 
 // Global data structures implementation
 std::unordered_map<int, Node> nodes;

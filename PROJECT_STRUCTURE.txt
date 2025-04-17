@@ -1,38 +1,34 @@
-CENG4120_Final_Project_Group7/
-├── src/                                  # Source code directory
-│   ├── main.cpp                          # Main program entry point
-│   │
-│   ├── Interface/                        # Interface definitions (header files)
-│   │   ├── Reader.hpp                    # Reader interface declarations
-│   │   ├── Router.hpp                    # Router interface declarations
-│   │   └── Writer.hpp                    # Writer interface declarations
-│   │
-│   ├── Reader/                           # Input handling implementation
-│   │   └── STReader.cpp                  # Standard reader implementation
-│   │
-│   ├── Router/                           # Routing algorithm implementation
-│   │   └── router.cpp                    # PathFinder algorithm implementation
-│   │
-│   └── Writer/                           # Output generation implementation
-│       └── output.cpp                    # Result writing implementation
+CENG4120_Final_Project_Group7 - FPGA Router
 │
-├── data/                                 # Data directory
-│   ├── benchmarks/                       # Benchmark designs
+├── src/                                  # Source code
+│   ├── main.cpp                          # Program entry point
+│   │
+│   ├── Interface/                        # Header files
+│   │   ├── Reader.hpp                    # Input handling interface
+│   │   ├── Router.hpp                    # PathFinder algorithm interface
+│   │   └── Writer.hpp                    # Output generation interface
+│   │
+│   ├── Reader/                           # Input implementation
+│   │   └── STReader.cpp                  # Parses device files and netlists
+│   │
+│   ├── Router/                           # Routing implementation
+│   │   └── router.cpp                    # PathFinder algorithm with A* search
+│   │
+│   └── Writer/                           # Output implementation
+│       └── output.cpp                    # Generates routing results
+│
+├── data/                                 # Test data
+│   ├── benchmarks/                       # Input netlists
 │   │   ├── design1.netlist               # Simple test case
 │   │   ├── design2.netlist               # Small test case
-│   │   ├── design3.netlist               # Medium difficulty test case
-│   │   ├── design4.netlist               # Medium difficulty test case
-│   │   └── design5.netlist               # Large real-world test case
+│   │   ├── design3.netlist               # Medium test case
+│   │   ├── design4.netlist               # Medium test case
+│   │   └── design5.netlist               # Large real-world case
 │   │
-│   └── results/                          # Empty directory for routing results
+│   └── results/                          # Output directory for results
 │
 ├── docs/                                 # Documentation
-│   └── CENG4120-Final-FPGA Routing.docx  # Assignment description
+│   └── CENG4120-Final-FPGA Routing.docx  # Assignment specification
 │
-├── README.md                             # Project documentation
+├── README.md                             # Project information
 └── PROJECT_STRUCTURE.txt                 # This file
-
-Notes:
-- After compilation, the fpga_router executable will be generated in the root directory
-- The data/results/ directory will contain .route files after running the program
-- The repository has a clean organization with interfaces separated from implementations 

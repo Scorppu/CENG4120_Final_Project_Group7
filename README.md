@@ -1,76 +1,113 @@
-# CENG4120_Final_Project_Group7
-Chan Eugene, Chan Yik Kuen, Lei Hei Tung
+# FPGA Router
 
-## FPGA Router Implementation
+A high-performance FPGA router implementing the PathFinder algorithm with parallel processing and A* search optimizations. Developed as the final project for CENG4120 by Group 7.
 
-This project implements an FPGA router using the PathFinder algorithm with optimizations for performance and solution quality.
+## Team Members
+- Chan Eugene
+- Chan Yik Kuen 
+- Lei Hei Tung
 
-### Features
+## Overview
 
-- Parallel processing for faster routing
-- A* search with distance-based heuristic
-- Adaptive congestion handling
-- Prioritized net routing based on complexity
-- Automatic timeout handling to meet time limits
+This router takes FPGA device specifications and netlists as input, and produces valid routing paths that connect all nets without congestion. Key performance metrics include:
+1. Congestion elimination (no shared nodes)
+2. Net routing success rate
+3. Total wirelength minimization
 
-### Project Structure
+## Algorithm
 
-The project is organized with a clean separation of interfaces and implementations:
+The implementation uses a negotiation-based PathFinder algorithm:
 
-- `src/` - Source code directory
-  - `main.cpp` - Program entry point
-  - `Interface/` - Header files (.hpp)
-    - `Reader.hpp` - Input parsing declarations
-    - `Router.hpp` - Routing algorithm declarations
-    - `Writer.hpp` - Output generation declarations
-  - `Reader/` - Input implementation
-    - `STReader.cpp` - Standard reader implementation
-  - `Router/` - Routing implementation
-    - `router.cpp` - PathFinder algorithm implementation
-  - `Writer/` - Output implementation
-    - `output.cpp` - Result writing implementation
+1. **Initial Routing Phase**: Routes all nets while ignoring congestion, creating an initial solution.
+2. **Iterative Negotiation Phase**: Repeatedly rips up and re-routes nets with increasing penalties for congestion.
+3. **Cost Function**: Combines base cost, historical congestion, and present congestion.
+4. **Path Finding**: Uses A* search with spatial distance heuristic for efficient path discovery.
 
-- `data/` - Data directory
-  - `benchmarks/` - Contains netlist files for testing
-  - `results/` - Directory for routing results
+## Key Features
 
-- `docs/` - Documentation files
-  - `CENG4120-Final-FPGA Routing.docx` - Assignment description
+- **Parallel Processing**: Divides nets among multiple threads for faster routing
+- **A* Search**: Uses distance-based heuristics to find optimal paths quickly
+- **Adaptive Congestion Penalties**: Incrementally increases costs for congested resources
+- **Routing Prioritization**: Handles more complex nets (with many sinks) first
+- **Timeout Handling**: Ensures results are produced within time constraints
 
-### Building the Router
-
-To compile the router, simply run:
+## Project Structure
 
 ```
-make
+CENG4120_Final_Project_Group7 - FPGA Router
+│
+├── src/                                  # Source code
+│   ├── main.cpp                          # Program entry point
+│   │
+│   ├── Interface/                        # Header files
+│   │   ├── Reader.hpp                    # Input handling interface
+│   │   ├── Router.hpp                    # PathFinder algorithm interface
+│   │   └── Writer.hpp                    # Output generation interface
+│   │
+│   ├── Reader/                           # Input implementation
+│   │   └── STReader.cpp                  # Parses device files and netlists
+│   │
+│   ├── Router/                           # Routing implementation
+│   │   └── router.cpp                    # PathFinder algorithm with A* search
+│   │
+│   └── Writer/                           # Output implementation
+│       └── output.cpp                    # Generates routing results
+│
+├── data/                                 # Test data
+│   ├── benchmarks/                       # Input netlists
+│   │   ├── design1.netlist               # Simple test case
+│   │   ├── design2.netlist               # Small test case
+│   │   ├── design3.netlist               # Medium test case
+│   │   ├── design4.netlist               # Medium test case
+│   │   └── design5.netlist               # Large real-world case
+│   │
+│   └── results/                          # Output directory for results
+│
+├── docs/                                 # Documentation
+│   └── CENG4120-Final-FPGA Routing.docx  # Assignment specification
+│
+├── README.md                             # This file
+└── PROJECT_STRUCTURE.txt                 # Contains Project file structure
 ```
 
-This will create the `fpga_router` executable.
+## Building
 
-### Running the Router
+To compile the router:
 
-To run the router on a design:
-
+```bash
+cmake -S . -B out/build/
+cd out/build/
+ninja
 ```
-./fpga_router <device_file> <netlist_file> <output_file>
+
+## Usage
+
+```bash
+./fpga_router <device> <netlist> <result>
 ```
 
 Example:
+```bash
+./fpga_router xcvu3p.device design1.netlist design1.result
 ```
-./fpga_router xcvu3p.device design1.netlist design1.route
-```
 
-### Algorithm Details
+## Benchmarks
 
-The implemented router uses the PathFinder algorithm with the following key components:
+The router is tested on 5 designs of increasing complexity:
+- Design 1-2: Simple test cases
+- Design 3-4: Medium difficulty designs
+- Design 5: Large real-world FPGA design
 
-1. Initial routing of all nets while allowing congestion
-2. Iterative rip-up and re-route with increasing congestion penalties
-3. History-based cost updates to discourage sharing of resources
-4. A* search for efficient path finding
-5. Parallel routing of nets for performance
+Time limits:
+- Designs 1-4: 100 seconds
+- Design 5: 250 seconds
 
-The router prioritizes:
-1. Eliminating congestion (shared nodes)
-2. Maximizing the number of successfully routed nets
-3. Minimizing total wirelength
+## Results Analysis
+
+The router outputs the following metrics:
+- Number of successfully routed nets
+- Presence of congestion
+- Total wirelength
+- Execution time
+
+Results are ranked based on routing success and wirelength minimization.
