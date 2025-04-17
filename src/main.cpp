@@ -1,6 +1,6 @@
-#include "include/input.h"
-#include "include/router.h"
-#include "include/output.h"
+#include "Interface/Reader.hpp"
+#include "Interface/Router.hpp"
+#include "Interface/Writer.hpp"
 #include <iostream>
 #include <chrono>
 #include <thread>

@@ -1,7 +1,7 @@
 #ifndef ROUTER_H
 #define ROUTER_H
 
-#include "include/input.h"
+#include "Interface/Reader.hpp"
 #include <atomic>
 #include <unordered_map>
 #include <mutex>

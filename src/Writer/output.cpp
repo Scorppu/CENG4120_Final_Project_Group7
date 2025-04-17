@@ -1,5 +1,5 @@
-#include "include/output.h"
-#include "include/input.h"
+#include "include/Writer.hpp"
+#include "include/Reader.hpp"
 #include <iostream>
 #include <fstream>
 #include <iomanip>
