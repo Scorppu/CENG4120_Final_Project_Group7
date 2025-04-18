@@ -11,14 +11,16 @@
 #include "../Datastructure.hpp"
 
 class Reader {
-public:
+    std::vector<Node> nodes;
+    std::vector<std::vector<int>> edges;
+    std::vector<Net> nets;
     std::string devicePath;
     std::string netlistPath;
-
+public:
     int counter = 0;
 
     // Parse the device file and return the number of nodes
-    virtual bool parseDevice(std::vector<Node>& nodes, std::vector<std::vector<int>>& edges) {
+    virtual bool parseDevice() {
         // Get first line of device file and define the number of nodes
 
         std::ifstream deviceFile(devicePath);
@@ -134,7 +136,7 @@ public:
 
 
     // Parse the netlist file
-    virtual bool parseNetlist(std::vector<Net>& nets) {
+    virtual bool parseNetlist() {
         std::ifstream netlistFile(netlistPath);
         if (!netlistFile.is_open()) {
             std::cerr << "Failed to open netlist file: " << netlistPath << std::endl;
@@ -185,7 +187,7 @@ public:
     }
     
     // Add method to verify and display device parsing results
-    void verifyDeviceParsing(const std::vector<Node>& nodes, const std::vector<std::vector<int>>& edges) {
+    void verifyDeviceParsing() {
         std::cout << "\n==== Device Parsing Verification ====\n";
         std::cout << "Total nodes parsed: " << nodes.size() << std::endl;
         std::cout << "Total edges parsed: " << edges.size() << std::endl;
@@ -257,7 +259,7 @@ public:
     }
 
     // Function to print all connections in the edges data structure
-    void printAllConnections(const std::vector<std::vector<int>>& edges) {
+    void printAllConnections() {
         std::cout << "\n==== All Connections in Device ====\n";
         std::cout << "Total number of edges: " << edges.size() << std::endl;
         
@@ -288,7 +290,7 @@ public:
     }
 
     // Function to verify the contents of the netlist
-    void verifyNetlist(const std::vector<Net>& nets) {
+    void verifyNetlist() {
         std::cout << "\n==== Netlist Verification ====\n";
         std::cout << "Total number of nets: " << nets.size() << std::endl;
         
