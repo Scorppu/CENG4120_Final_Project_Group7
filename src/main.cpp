@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
     std::string outputFile = argv[3];
 
     std::vector<Node> nodes;
-    std::vector<Edge> edges;
+    std::vector<std::vector<int>> edges;
     std::vector<Net> nets;
     
     // Parse input files
@@ -27,14 +27,20 @@ int main(int argc, char* argv[]) {
 
     auto deviceParseStart = std::chrono::high_resolution_clock::now();
     reader.parseDevice(nodes, edges);
-    std::cout << "Device parsing time: " << std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - deviceParseStart).count() << " seconds" << std::endl;
+    auto deviceParseEnd = std::chrono::high_resolution_clock::now();
     std::cout << reader.counter << std::endl;
 
-
+    // Verify device parsing
+    reader.verifyDeviceParsing(nodes, edges);
+    std::cout << "Device parsing time: " << std::chrono::duration_cast<std::chrono::seconds>(deviceParseEnd - deviceParseStart).count() << " seconds" << std::endl;
 
     auto netlistParseStart = std::chrono::high_resolution_clock::now();
     reader.parseNetlist(nets);
-    std::cout << "Netlist parsing time: " << std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - netlistParseStart).count() << " seconds" << std::endl;
+    auto netlistParseEnd = std::chrono::high_resolution_clock::now();
+
+    // Verify netlist parsing
+    reader.verifyNetlist(nets);
+    std::cout << "Netlist parsing time: " << std::chrono::duration_cast<std::chrono::milliseconds>(netlistParseEnd - netlistParseStart).count() << " milliseconds" << std::endl;
 
     return 0;
 }
