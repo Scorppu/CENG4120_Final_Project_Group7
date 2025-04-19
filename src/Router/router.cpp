@@ -19,6 +19,13 @@ class Router {
         // Shared pathfinding instance to avoid costly recreation
         std::unique_ptr<AStarSearch> pathfinder;
         
+        // Reusable data structures to avoid repeated allocation
+        std::unordered_set<int> existingNodeIds;
+        std::vector<int> validSinkNodeIds;
+
+        // Verbosity level for logging
+        bool verboseLogging = false;
+        
     public:
         Router() : pathfinder(nullptr) {}
         
@@ -48,6 +55,11 @@ class Router {
             clearPathfinder();
         }
 
+        // Set verbosity level
+        void setVerbose(bool verbose) {
+            verboseLogging = verbose;
+        }
+
         // Resolve congestions (Rip up and reroute)
         virtual void resolveCongestion() {
             // Implement congestion resolution logic here
@@ -57,7 +69,9 @@ class Router {
         virtual std::shared_ptr<RoutingTree> routeSingleNet(Net& net, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) {
             // Check if we have enough nodes to route
             if (net.nodeIDs.size() < 2) {
-                std::cerr << "Net " << net.id << " (" << net.name << ") has fewer than 2 nodes, skipping" << std::endl;
+                if (verboseLogging) {
+                    std::cerr << "Net " << net.id << " (" << net.name << ") has fewer than 2 nodes, skipping" << std::endl;
+                }
                 return nullptr;
             }
 
@@ -69,68 +83,44 @@ class Router {
             // Create a routing tree to store the results
             std::shared_ptr<RoutingTree> routingTree = std::make_shared<RoutingTree>(net.id, sourceNodeId, sinkNodeIds);
             
-            // Use a more memory-efficient approach for checking node existence
-            std::unordered_set<int> existingNodeIds;
-            existingNodeIds.reserve(nodes.size());  // Pre-allocate for efficiency
-            
-            for (const auto& node : nodes) {
-                existingNodeIds.insert(node.id);
-            }
-            
             // Verify source node exists in the graph
             if (existingNodeIds.find(sourceNodeId) == existingNodeIds.end()) {
-                std::cerr << "Source node " << sourceNodeId << " for net " << net.id 
-                          << " (" << net.name << ") does not exist in the graph, skipping" << std::endl;
+                if (verboseLogging) {
+                    std::cerr << "Source node " << sourceNodeId << " for net " << net.id 
+                            << " (" << net.name << ") does not exist in the graph, skipping" << std::endl;
+                }
                 return nullptr;
             }
             
             // Filter sinks to only include those that exist in the graph
-            std::vector<int> validSinkNodeIds;
+            validSinkNodeIds.clear();
             validSinkNodeIds.reserve(sinkNodeIds.size());  // Pre-allocate for efficiency
             
             for (int sinkId : sinkNodeIds) {
                 if (existingNodeIds.find(sinkId) != existingNodeIds.end()) {
                     validSinkNodeIds.push_back(sinkId);
-                } else {
+                } else if (verboseLogging) {
                     std::cerr << "Sink node " << sinkId << " for net " << net.id 
-                              << " does not exist in the graph, skipping this sink" << std::endl;
+                            << " does not exist in the graph, skipping this sink" << std::endl;
                 }
             }
             
             if (validSinkNodeIds.empty()) {
-                std::cerr << "No valid sink nodes for net " << net.id 
-                          << " (" << net.name << "), skipping" << std::endl;
+                if (verboseLogging) {
+                    std::cerr << "No valid sink nodes for net " << net.id 
+                            << " (" << net.name << "), skipping" << std::endl;
+                }
                 return nullptr;
             }
-            
-            // Ensure we have a valid pathfinder
-            if (!pathfinder) {
-                std::cout << "Creating A* pathfinder..." << std::endl;
-                auto startTime = std::chrono::high_resolution_clock::now();
-                
-                pathfinder = std::make_unique<AStarSearch>(edges, nodes);
-                pathfinder->setTimeout(2000);  // Set 2 second timeout
-                
-                auto endTime = std::chrono::high_resolution_clock::now();
-                auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-                std::cout << "Pathfinder initialization took " << duration << "ms" << std::endl;
-            }
-            
-            // Set custom cost function if needed for congestion
-            pathfinder->setCostFunction([this](int fromId, int toId) {
-                return this->calculateCost(fromId, toId);
-            });
             
             // Route from source to each sink
             std::unordered_set<int> remainingSinks(validSinkNodeIds.begin(), validSinkNodeIds.end());
             bool allSinksRouted = true;
             
-            // Debug information
-            std::cout << "Routing net " << net.id << " (" << net.name << ") with source " 
-                      << sourceNodeId << " and " << validSinkNodeIds.size() << " sinks" << std::endl;
-            
-            // Start timing
-            auto startTime = std::chrono::high_resolution_clock::now();
+            // Minimal debug information
+            if (verboseLogging) {
+                std::cout << "Routing net " << net.id << " with " << validSinkNodeIds.size() << " sinks" << std::endl;
+            }
             
             for (int sinkId : validSinkNodeIds) {
                 // Find path from source to this sink
@@ -138,15 +128,15 @@ class Router {
                 
                 if (path.empty() || path.size() < 2) {
                     // Failed to find a path to this sink
-                    std::cerr << "Failed to find path from " << sourceNodeId << " to " << sinkId << std::endl;
+                    if (verboseLogging) {
+                        std::cerr << "Failed to find path from " << sourceNodeId << " to " << sinkId << std::endl;
+                    }
                     allSinksRouted = false;
                     continue;
                 }
                 
-                std::cout << "Found path from " << sourceNodeId << " to " << sinkId 
-                          << " with " << path.size() << " nodes" << std::endl;
-                
-                // Convert path to edges and add to routing tree
+                // Convert path to edges and add to routing tree (optimize with reserve)
+                routingTree->edges.reserve(routingTree->edges.size() + path.size() - 1);
                 for (size_t i = 0; i < path.size() - 1; ++i) {
                     routingTree->edges.push_back({path[i], path[i+1]});
                 }
@@ -154,11 +144,6 @@ class Router {
                 // Mark this sink as routed
                 remainingSinks.erase(sinkId);
             }
-            
-            // Report total routing time
-            auto endTime = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-            std::cout << "Completed routing net " << net.id << " in " << duration << "ms" << std::endl;
                         
             // Set success flag on routing tree
             routingTree->isRouted = remainingSinks.empty();
@@ -179,35 +164,56 @@ class Router {
             // Reserve space for results
             routingResults.reserve(nets.size());
             
+            // Pre-build set of existing node IDs (do this once)
+            existingNodeIds.clear();
+            existingNodeIds.reserve(nodes.size());
+            for (const auto& node : nodes) {
+                existingNodeIds.insert(node.id);
+            }
+            
             // Initialize the global pathfinder once
-            auto startTime = std::chrono::high_resolution_clock::now();
-            
-            // Create the pathfinder
-            pathfinder = std::make_unique<AStarSearch>(edges, nodes);
-            pathfinder->setTimeout(2000); // 2 second timeout per path
-            
-            auto endTime = std::chrono::high_resolution_clock::now();
-            auto initTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-            std::cout << "Initialized pathfinder in " << initTime << "ms" << std::endl;
+            if (!pathfinder) {
+                auto startTime = std::chrono::high_resolution_clock::now();
+                
+                pathfinder = std::make_unique<AStarSearch>(edges, nodes);
+                pathfinder->setTimeout(2000); // 2 second timeout per path
+                
+                // Set cost function once for all paths
+                pathfinder->setCostFunction([this](int fromId, int toId) {
+                    return this->calculateCost(fromId, toId);
+                });
+                
+                auto endTime = std::chrono::high_resolution_clock::now();
+                auto initTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+                std::cout << "Initialized pathfinder in " << initTime << "ms" << std::endl;
+            }
             
             // Start timing the full routing process
-            startTime = std::chrono::high_resolution_clock::now();
+            auto startTime = std::chrono::high_resolution_clock::now();
             
-            for (Net& net : nets) {
+            // Pre-allocate vector for sink IDs to further reduce allocations
+            validSinkNodeIds.reserve(100);  // Reasonable size for most nets
+            
+            // Show progress every 10% of nets
+            size_t progressStep = std::max(size_t(1), nets.size() / 10);
+            
+            for (size_t i = 0; i < nets.size(); ++i) {
+                // Report progress occasionally
+                if (i % progressStep == 0) {
+                    std::cout << "Routing progress: " << (i * 100 / nets.size()) << "%" << std::endl;
+                }
+                
                 // Route the net and store the result
-                std::shared_ptr<RoutingTree> result = routeSingleNet(net, edges, nodes);
+                std::shared_ptr<RoutingTree> result = routeSingleNet(nets[i], edges, nodes);
                 if (result) {
                     routingResults.push_back(result);
                 }
             }
             
             // Report total time
-            endTime = std::chrono::high_resolution_clock::now();
+            auto endTime = std::chrono::high_resolution_clock::now();
             auto totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
             std::cout << "Complete routing of all nets took " << totalTime << "ms" << std::endl;
-
-            // resolve congestions
-            // resolveCongestion();
         }
         
         // Print routing results
@@ -225,11 +231,13 @@ class Router {
             std::cout << "Successfully routed: " << successfullyRouted << std::endl;
             std::cout << "Success rate: " << (routingResults.empty() ? 0 : (successfullyRouted * 100.0 / routingResults.size())) << "%" << std::endl;
             
-            // Print details for each net if needed
-            for (const auto& tree : routingResults) {
-                std::cout << "Net " << tree->NetId << ": " 
-                          << (tree->isRouted ? "Successfully routed" : "Failed to route")
-                          << " (" << tree->edges.size() << " connections)" << std::endl;
+            // Only print detailed per-net results if verbose logging is enabled
+            if (verboseLogging) {
+                for (const auto& tree : routingResults) {
+                    std::cout << "Net " << tree->NetId << ": " 
+                            << (tree->isRouted ? "Successfully routed" : "Failed to route")
+                            << " (" << tree->edges.size() << " connections)" << std::endl;
+                }
             }
             
             std::cout << "==========================\n" << std::endl;
