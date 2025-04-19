@@ -7,6 +7,7 @@
 #include "DataStructure.hpp"
 #include "Reader/Reader.cpp"
 #include "Router/Router.cpp"
+#include "Writer/Write.cpp"
 
 int main(int argc, char* argv[]) {
     if (argc != 4) {
@@ -67,6 +68,12 @@ int main(int argc, char* argv[]) {
             // Print routing results
             router.printRoutingResults();
             
+            // Write output to file
+            Writer writer(outputFile);
+            writer.setRoutingResults(&router.getRoutingResults());
+            writer.setOriginalNets(&nets);
+            writer.writeOutput();
+            
             // Explicitly clean up router resources
             std::cout << "Cleaning up router resources..." << std::endl;
             router.clearAll();
@@ -84,6 +91,7 @@ int main(int argc, char* argv[]) {
     auto end = std::chrono::high_resolution_clock::now();
     std::cout << "Program completed successfully." << std::endl;
     std::cout << "Total program time: " << std::chrono::duration_cast<std::chrono::seconds>(end - start).count() << " seconds" << std::endl;
+
     return 0;
 }
 
