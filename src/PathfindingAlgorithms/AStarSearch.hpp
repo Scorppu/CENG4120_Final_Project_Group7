@@ -33,6 +33,18 @@ public:
     // Set timeout for pathfinding (in milliseconds)
     void setTimeout(int milliseconds);
 
+    // Set congestion penalty factor
+    void setCongestionPenaltyFactor(double factor);
+    
+    // Update congestion map after routing a path
+    void updateCongestion(const std::vector<int>& path, double congestionIncrement = 1.0);
+    
+    // Reset congestion map
+    void resetCongestion();
+    
+    // Get current congestion at a node
+    double getCongestion(int nodeId) const;
+
 private:
     // Reference to the graph structure
     const std::vector<std::vector<int>>& edges;
@@ -43,6 +55,12 @@ private:
     
     // Map from node ID to index in nodes vector
     std::unordered_map<int, size_t> nodeIdToIndex;
+    
+    // Congestion map: node ID -> congestion value
+    std::unordered_map<int, double> congestionMap;
+    
+    // Congestion penalty factor
+    double congestionPenaltyFactor;
     
     // Timeout in milliseconds
     int timeoutMs;
@@ -61,6 +79,9 @@ private:
     
     // Default cost: uniform cost of 1
     double defaultCost(int fromId, int toId);
+    
+    // Congestion aware cost function
+    double congestionAwareCost(int fromId, int toId);
     
     // Reconstruct path from came_from map
     std::vector<int> reconstructPath(

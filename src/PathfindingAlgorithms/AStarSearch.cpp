@@ -23,7 +23,8 @@ struct AStarNode {
 AStarSearch::AStarSearch(const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) 
     : edges(edges), 
       nodes(nodes), 
-      timeoutMs(5000) 
+      timeoutMs(5000),
+      congestionPenaltyFactor(1.0)
 {
     // Set default functions
     heuristicFunc = [this](int currentId, int targetId) {
@@ -31,7 +32,7 @@ AStarSearch::AStarSearch(const std::vector<std::vector<int>>& edges, const std::
     };
     
     costFunc = [this](int fromId, int toId) {
-        return this->defaultCost(fromId, toId);
+        return this->congestionAwareCost(fromId, toId);
     };
     
     // Initialize neighbor cache
@@ -42,36 +43,39 @@ AStarSearch::AStarSearch(const std::vector<std::vector<int>>& edges, const std::
     for (size_t i = 0; i < nodes.size(); ++i) {
         nodeIdToIndex[nodes[i].id] = i;
     }
+    
+    // Initialize congestion map
+    resetCongestion();
 }
 
 // Build a cache of neighbors for quick lookup
 void AStarSearch::buildNeighborCache() {
     neighborCache.clear();
     
-    // First pass: collect node IDs and pre-allocate vectors
-    std::unordered_set<int> allNodeIds;
+    // Estimate neighbor cache size based on edge count
+    neighborCache.reserve(nodes.size());
+    
+    // Build the neighbor map for quick lookup in a single pass
     for (const auto& edge : edges) {
-        if (!edge.empty()) {
-            allNodeIds.insert(edge[0]);
-            for (size_t i = 1; i < edge.size(); ++i) {
-                allNodeIds.insert(edge[i]);
-            }
+        if (edge.size() < 2) continue; // Skip empty or invalid edges
+        
+        int parent = edge[0];
+        
+        // Pre-allocate space for this parent's neighbors if not already done
+        auto it = neighborCache.find(parent);
+        if (it == neighborCache.end()) {
+            // Reserve typical number of neighbors to avoid frequent reallocations
+            neighborCache[parent].reserve(8);
         }
-    }
-    
-    // Pre-allocate space in neighborCache for all nodes
-    for (int nodeId : allNodeIds) {
-        neighborCache[nodeId].reserve(8);  // Reserve space for typical number of neighbors
-    }
-    
-    // Build the neighbor map for quick lookup (unidirectional)
-    for (const auto& edge : edges) {
-        if (!edge.empty()) {
-            int parent = edge[0];
+        
+        // Add all children as neighbors (parent->child only)
+        for (size_t i = 1; i < edge.size(); ++i) {
+            neighborCache[parent].push_back(edge[i]);
             
-            // Add all children as neighbors (parent->child only)
-            for (size_t i = 1; i < edge.size(); ++i) {
-                neighborCache[parent].push_back(edge[i]);
+            // Ensure the child node has an entry in the cache (even if empty)
+            // This avoids having to check for key existence in getNeighbors
+            if (neighborCache.find(edge[i]) == neighborCache.end()) {
+                neighborCache[edge[i]]; // Insert with empty vector
             }
         }
     }
@@ -101,17 +105,60 @@ double AStarSearch::defaultCost(int fromId, int toId) {
     return 1.0;
 }
 
+// Congestion aware cost function
+double AStarSearch::congestionAwareCost(int fromId, int toId) {
+    // Base cost (uniform cost of 1)
+    double baseCost = defaultCost(fromId, toId);
+    
+    // Get congestion at the destination node
+    double congestion = getCongestion(toId);
+    
+    // Calculate congestion penalty
+    double congestionPenalty = congestion * congestionPenaltyFactor;
+    
+    // Return combined cost: base cost + congestion penalty
+    return baseCost + congestionPenalty;
+}
+
 // Get neighbors of a node - OPTIMIZED to return const reference
 const std::vector<int>& AStarSearch::getNeighbors(int nodeId) {
     // Use the neighbor cache for O(1) lookup
     static const std::vector<int> emptyVec; // For missing entries
+    
+    // Use find instead of operator[] to avoid insertion of new elements
     auto it = neighborCache.find(nodeId);
+    
+    // Since we ensure all nodes have entries in buildNeighborCache,
+    // this should rarely happen, but we keep it for safety
     return (it != neighborCache.end()) ? it->second : emptyVec;
 }
 
 // Set timeout in milliseconds
 void AStarSearch::setTimeout(int milliseconds) {
     timeoutMs = milliseconds;
+}
+
+// Set congestion penalty factor
+void AStarSearch::setCongestionPenaltyFactor(double factor) {
+    congestionPenaltyFactor = factor;
+}
+
+// Update congestion map after routing a path
+void AStarSearch::updateCongestion(const std::vector<int>& path, double congestionIncrement) {
+    for (int nodeId : path) {
+        congestionMap[nodeId] += congestionIncrement;
+    }
+}
+
+// Reset congestion map
+void AStarSearch::resetCongestion() {
+    congestionMap.clear();
+}
+
+// Get current congestion at a node
+double AStarSearch::getCongestion(int nodeId) const {
+    auto it = congestionMap.find(nodeId);
+    return (it != congestionMap.end()) ? it->second : 0.0;
 }
 
 // Reconstruct path from the came_from map - OPTIMIZED
@@ -182,14 +229,15 @@ std::vector<int> AStarSearch::findPath(int sourceNodeId, int targetNodeId) {
     
     // Main A* loop
     while (!openSet.empty() && iterations < MAX_ITERATIONS) {
-        // Check for timeout
-        auto currentTime = std::chrono::high_resolution_clock::now();
-        auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-            currentTime - startTime).count();
-        
-        if (elapsedMs > timeoutMs) {
-            // Only log timeouts in verbose mode
-            break;
+        // Check for timeout - only every 100 iterations to reduce overhead
+        if (iterations % 100 == 0) {
+            auto currentTime = std::chrono::high_resolution_clock::now();
+            auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+                currentTime - startTime).count();
+            
+            if (elapsedMs > timeoutMs) {
+                break;
+            }
         }
         
         // Get node with lowest fScore
@@ -217,7 +265,7 @@ std::vector<int> AStarSearch::findPath(int sourceNodeId, int targetNodeId) {
                 continue;
             }
             
-            // Calculate tentative gScore
+            // Calculate tentative gScore using the congestion-aware cost function
             double tentativeGScore = gScore[current] + costFunc(current, neighbor);
             
             // If this path is better than any previous one
@@ -225,7 +273,11 @@ std::vector<int> AStarSearch::findPath(int sourceNodeId, int targetNodeId) {
                 // Update metadata
                 cameFrom[neighbor] = current;
                 gScore[neighbor] = tentativeGScore;
-                fScore[neighbor] = gScore[neighbor] + heuristicFunc(neighbor, targetNodeId);
+                // Use heuristic plus congestion penalty for more informed search
+                double hValue = heuristicFunc(neighbor, targetNodeId);
+                double nodeCongestion = getCongestion(neighbor);
+                double totalCost = gScore[neighbor] + hValue + (nodeCongestion * congestionPenaltyFactor);
+                fScore[neighbor] = totalCost;
                 
                 // Add to open set
                 openSet.push({fScore[neighbor], neighbor});
@@ -242,8 +294,33 @@ std::vector<std::vector<int>> AStarSearch::findPaths(int sourceNodeId, const std
     std::vector<std::vector<int>> paths;
     paths.reserve(targetNodeIds.size());
     
-    for (int targetId : targetNodeIds) {
-        paths.push_back(findPath(sourceNodeId, targetId));
+    // Create a copy of all target IDs for processing
+    std::vector<int> remainingTargets = targetNodeIds;
+    
+    // Process targets one by one, updating congestion after each path
+    while (!remainingTargets.empty()) {
+        // Find the nearest target based on heuristic distance
+        auto bestTargetIt = std::min_element(remainingTargets.begin(), remainingTargets.end(),
+            [this, sourceNodeId](int target1, int target2) {
+                return heuristicFunc(sourceNodeId, target1) < heuristicFunc(sourceNodeId, target2);
+            });
+        
+        // Get the selected target
+        int currentTarget = *bestTargetIt;
+        
+        // Find path to this target
+        std::vector<int> path = findPath(sourceNodeId, currentTarget);
+        
+        // Add the path to our results
+        paths.push_back(path);
+        
+        // Update congestion map with this path
+        if (!path.empty()) {
+            updateCongestion(path);
+        }
+        
+        // Remove this target from the remaining list
+        remainingTargets.erase(bestTargetIt);
     }
     
     return paths;
