@@ -68,8 +68,8 @@ private:
         int current
     );
     
-    // Get neighbors of a node
-    std::vector<int> getNeighbors(int nodeId);
+    // Get neighbors of a node - optimized to return const reference
+    const std::vector<int>& getNeighbors(int nodeId);
 };
 
 #endif // ASTAR_SEARCH_HPP 

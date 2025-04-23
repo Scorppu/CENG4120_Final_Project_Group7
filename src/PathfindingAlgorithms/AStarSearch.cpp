@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <iostream>
 #include <chrono>
+#include <limits>
 
 // Structure for A* nodes in the priority queue
 struct AStarNode {
@@ -37,6 +38,7 @@ AStarSearch::AStarSearch(const std::vector<std::vector<int>>& edges, const std::
     buildNeighborCache();
     
     // Initialize node ID to index map
+    nodeIdToIndex.reserve(nodes.size()); // Pre-allocate for efficiency
     for (size_t i = 0; i < nodes.size(); ++i) {
         nodeIdToIndex[nodes[i].id] = i;
     }
@@ -99,16 +101,12 @@ double AStarSearch::defaultCost(int fromId, int toId) {
     return 1.0;
 }
 
-// Get neighbors of a node
-std::vector<int> AStarSearch::getNeighbors(int nodeId) {
+// Get neighbors of a node - OPTIMIZED to return const reference
+const std::vector<int>& AStarSearch::getNeighbors(int nodeId) {
     // Use the neighbor cache for O(1) lookup
+    static const std::vector<int> emptyVec; // For missing entries
     auto it = neighborCache.find(nodeId);
-    if (it != neighborCache.end()) {
-        return it->second;
-    }
-    
-    // Return empty vector if node has no neighbors
-    return std::vector<int>();
+    return (it != neighborCache.end()) ? it->second : emptyVec;
 }
 
 // Set timeout in milliseconds
@@ -116,26 +114,44 @@ void AStarSearch::setTimeout(int milliseconds) {
     timeoutMs = milliseconds;
 }
 
-// Reconstruct path from the came_from map
+// Reconstruct path from the came_from map - OPTIMIZED
 std::vector<int> AStarSearch::reconstructPath(
     const std::unordered_map<int, int>& cameFrom,
     int current
 ) {
+    // Estimate path size to reduce reallocations
     std::vector<int> path;
-    path.push_back(current);
+    path.reserve(cameFrom.size() + 1);  // Reserve space for worst case
     
-    // Traverse the came_from map backwards to build the path
-    while (cameFrom.find(current) != cameFrom.end()) {
-        current = cameFrom.at(current);
-        path.push_back(current);
+    // Count path length first to avoid reversal
+    int pathLength = 1;  // Start with 1 for the target node
+    int temp = current;
+    auto it = cameFrom.find(temp);
+    while (it != cameFrom.end()) {
+        pathLength++;
+        temp = it->second;
+        it = cameFrom.find(temp);
     }
     
-    // Reverse to get path from source to target
-    std::reverse(path.begin(), path.end());
+    // Pre-allocate the correctly sized vector
+    path.resize(pathLength);
+    
+    // Fill the path in the correct order (from source to target)
+    int index = pathLength - 1;
+    path[index--] = current;
+    
+    // Use operator[] instead of at() for better performance
+    auto findIt = cameFrom.find(current);
+    while (findIt != cameFrom.end()) {
+        current = findIt->second;
+        path[index--] = current;
+        findIt = cameFrom.find(current);
+    }
+    
     return path;
 }
 
-// Main pathfinding method
+// Main pathfinding method - OPTIMIZED
 std::vector<int> AStarSearch::findPath(int sourceNodeId, int targetNodeId) {
     // Special case for when source and target are the same
     if (sourceNodeId == targetNodeId) {
@@ -149,19 +165,11 @@ std::vector<int> AStarSearch::findPath(int sourceNodeId, int targetNodeId) {
     using SearchNode = std::pair<double, int>;  // <f_score, node_id>
     std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>> openSet;
     
-    // Maps to store metadata
+    // Maps to store metadata - consider dense arrays if node IDs are dense and consecutive
     std::unordered_map<int, double> gScore; // Cost from start to node
     std::unordered_map<int, double> fScore; // Estimated total cost
     std::unordered_map<int, int> cameFrom;  // Parent pointers
     std::unordered_set<int> closedSet;      // Nodes already evaluated
-    
-    // Track visited edges to avoid revisiting paths (using bit-shifted integer for efficiency)
-    std::unordered_set<uint64_t> visitedEdges;
-    
-    // Helper function to create a unique edge identifier
-    auto createEdgeId = [](int fromId, int toId) -> uint64_t {
-        return (static_cast<uint64_t>(fromId) << 32) | static_cast<uint64_t>(toId);
-    };
     
     // Initialize with start node
     openSet.push({0, sourceNodeId});  // <f_score, node_id>
@@ -202,21 +210,12 @@ std::vector<int> AStarSearch::findPath(int sourceNodeId, int targetNodeId) {
         // Mark as evaluated
         closedSet.insert(current);
         
-        // Process all neighbors 
+        // Process all neighbors - OPTIMIZED to avoid edge tracking overhead
         for (int neighbor : getNeighbors(current)) {
             // Skip if already evaluated
             if (closedSet.find(neighbor) != closedSet.end()) {
                 continue;
             }
-            
-            // Check if this edge has been visited before
-            uint64_t edgeId = createEdgeId(current, neighbor);
-            if (visitedEdges.find(edgeId) != visitedEdges.end()) {
-                continue;  // Skip previously visited edges
-            }
-            
-            // Mark this edge as visited
-            visitedEdges.insert(edgeId);
             
             // Calculate tentative gScore
             double tentativeGScore = gScore[current] + costFunc(current, neighbor);
