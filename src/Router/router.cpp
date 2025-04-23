@@ -151,10 +151,18 @@ class Router {
             return routingTree;
         }
 
-        // Helper method to calculate cost between nodes (can be extended for congestion)
+        // Helper method to calculate cost between nodes (includes congestion awareness)
         double calculateCost(int fromId, int toId) {
-            // Simple uniform cost for now, can be updated with congestion later
-            return 1.0;
+            // Base cost of traversing between nodes
+            const double baseCost = 1.0;
+            
+            // Add congestion awareness if pathfinder is initialized
+            if (pathfinder) {
+                double congestion = pathfinder->getCongestion(toId);
+                return baseCost + (congestion * 0.5); // Apply 50% weight to current congestion
+            }
+            
+            return baseCost;
         }
 
         virtual void routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) {
@@ -183,10 +191,16 @@ class Router {
                     return this->calculateCost(fromId, toId);
                 });
                 
+                // Initialize congestion penalty factor
+                pathfinder->setCongestionPenaltyFactor(1.5);
+                
                 auto endTime = std::chrono::high_resolution_clock::now();
                 auto initTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
                 std::cout << "Initialized pathfinder in " << initTime << "ms" << std::endl;
             }
+            
+            // Reset congestion map at the start of routing
+            pathfinder->resetCongestion();
             
             // Start timing the full routing process
             auto startTime = std::chrono::high_resolution_clock::now();
@@ -194,19 +208,60 @@ class Router {
             // Pre-allocate vector for sink IDs to further reduce allocations
             validSinkNodeIds.reserve(100);  // Reasonable size for most nets
             
+            // Create indices for nets to sort them without modifying original array
+            std::vector<size_t> netIndices(nets.size());
+            for (size_t i = 0; i < nets.size(); ++i) {
+                netIndices[i] = i;
+            }
+            
+            // Sort nets by fanout (number of sinks) in descending order
+            std::sort(netIndices.begin(), netIndices.end(), [&nets](size_t a, size_t b) {
+                // nodeIDs[0] is the source, the rest are sinks, so size()-1 is the fanout
+                return (nets[a].nodeIDs.size() - 1) > (nets[b].nodeIDs.size() - 1);
+            });
+            
             // Show progress every 10% of nets
             size_t progressStep = std::max(size_t(1), nets.size() / 10);
             
-            for (size_t i = 0; i < nets.size(); ++i) {
+            // Route nets in order of descending fanout
+            for (size_t idx = 0; idx < netIndices.size(); ++idx) {
+                size_t i = netIndices[idx];
+                
                 // Report progress occasionally
-                if (i % progressStep == 0) {
-                    std::cout << "Routing progress: " << (i * 100 / nets.size()) << "%" << std::endl;
+                if (idx % progressStep == 0) {
+                    std::cout << "Routing progress: " << (idx * 100 / nets.size()) << "%" << std::endl;
+                    
+                    if (verboseLogging) {
+                        std::cout << "  Current net: " << nets[i].id 
+                                << " (" << nets[i].name << ") with fanout " 
+                                << (nets[i].nodeIDs.size() - 1) << std::endl;
+                    }
                 }
                 
                 // Route the net and store the result
                 std::shared_ptr<RoutingTree> result = routeSingleNet(nets[i], edges, nodes);
                 if (result) {
                     routingResults.push_back(result);
+                    
+                    // If the route was successful, update congestion map
+                    if (result->isRouted && !result->edges.empty()) {
+                        // Extract the full path from edges
+                        std::vector<int> path;
+                        path.reserve(result->edges.size() + 1);
+                        
+                        // Add the first node of the first edge
+                        if (!result->edges.empty()) {
+                            path.push_back(result->edges[0].first);
+                        }
+                        
+                        // Add all destination nodes
+                        for (const auto& edge : result->edges) {
+                            path.push_back(edge.second);
+                        }
+                        
+                        // Update congestion along this path
+                        pathfinder->updateCongestion(path);
+                    }
                 }
             }
             
@@ -214,6 +269,34 @@ class Router {
             auto endTime = std::chrono::high_resolution_clock::now();
             auto totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
             std::cout << "Complete routing of all nets took " << totalTime << "ms" << std::endl;
+            
+            // Report high-fanout net performance
+            if (verboseLogging) {
+                std::cout << "\nHigh-fanout net routing performance:" << std::endl;
+                const size_t TOP_NETS = std::min(size_t(10), nets.size());
+                
+                for (size_t i = 0; i < TOP_NETS; ++i) {
+                    size_t netIdx = netIndices[i];
+                    bool found = false;
+                    
+                    // Find the corresponding routing result
+                    for (const auto& tree : routingResults) {
+                        if (tree->NetId == nets[netIdx].id) {
+                            std::cout << "  Net " << nets[netIdx].id << " (" << nets[netIdx].name 
+                                    << ") with fanout " << (nets[netIdx].nodeIDs.size() - 1)
+                                    << ": " << (tree->isRouted ? "SUCCESS" : "FAILED") << std::endl;
+                            found = true;
+                            break;
+                        }
+                    }
+                    
+                    if (!found) {
+                        std::cout << "  Net " << nets[netIdx].id << " (" << nets[netIdx].name 
+                                << ") with fanout " << (nets[netIdx].nodeIDs.size() - 1)
+                                << ": NOT ROUTED" << std::endl;
+                    }
+                }
+            }
         }
         
         // Print routing results
