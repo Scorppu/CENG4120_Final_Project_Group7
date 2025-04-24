@@ -227,21 +227,26 @@ std::vector<int> AStarSearch::findPath(int sourceNodeId, int targetNodeId) {
     const int MAX_ITERATIONS = 50000;
     int iterations = 0;
     
+    // Initialize variables
+    int current;
+    double hValue, nodeCongestion, totalCost, tentativeGScore;
+
+    std::chrono::high_resolution_clock::time_point currentTime;
+    std::chrono::milliseconds elapsedMs;
+    
     // Main A* loop
     while (!openSet.empty() && iterations < MAX_ITERATIONS) {
         // Check for timeout - only every 100 iterations to reduce overhead
         if (iterations % 100 == 0) {
-            auto currentTime = std::chrono::high_resolution_clock::now();
-            auto elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                currentTime - startTime).count();
-            
-            if (elapsedMs > timeoutMs) {
+            currentTime = std::chrono::high_resolution_clock::now();
+            elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime);
+            if (elapsedMs.count() > timeoutMs) {
                 break;
             }
         }
         
         // Get node with lowest fScore
-        int current = openSet.top().second;
+        current = openSet.top().second;
         openSet.pop();
         iterations++;
         
@@ -266,7 +271,7 @@ std::vector<int> AStarSearch::findPath(int sourceNodeId, int targetNodeId) {
             }
             
             // Calculate tentative gScore using the congestion-aware cost function
-            double tentativeGScore = gScore[current] + costFunc(current, neighbor);
+            tentativeGScore = gScore[current] + costFunc(current, neighbor);
             
             // If this path is better than any previous one
             if (gScore.find(neighbor) == gScore.end() || tentativeGScore < gScore[neighbor]) {
@@ -274,9 +279,9 @@ std::vector<int> AStarSearch::findPath(int sourceNodeId, int targetNodeId) {
                 cameFrom[neighbor] = current;
                 gScore[neighbor] = tentativeGScore;
                 // Use heuristic plus congestion penalty for more informed search
-                double hValue = heuristicFunc(neighbor, targetNodeId);
-                double nodeCongestion = getCongestion(neighbor);
-                double totalCost = gScore[neighbor] + hValue + (nodeCongestion * congestionPenaltyFactor);
+                hValue = heuristicFunc(neighbor, targetNodeId);
+                nodeCongestion = getCongestion(neighbor);
+                totalCost = gScore[neighbor] + hValue + (nodeCongestion * congestionPenaltyFactor);
                 fScore[neighbor] = totalCost;
                 
                 // Add to open set
@@ -296,6 +301,10 @@ std::vector<std::vector<int>> AStarSearch::findPaths(int sourceNodeId, const std
     
     // Create a copy of all target IDs for processing
     std::vector<int> remainingTargets = targetNodeIds;
+
+    // Initialize variables
+    int currentTarget;
+    std::vector<int> path;
     
     // Process targets one by one, updating congestion after each path
     while (!remainingTargets.empty()) {
@@ -306,10 +315,10 @@ std::vector<std::vector<int>> AStarSearch::findPaths(int sourceNodeId, const std
             });
         
         // Get the selected target
-        int currentTarget = *bestTargetIt;
+        currentTarget = *bestTargetIt;
         
         // Find path to this target
-        std::vector<int> path = findPath(sourceNodeId, currentTarget);
+        path = findPath(sourceNodeId, currentTarget);
         
         // Add the path to our results
         paths.push_back(path);
