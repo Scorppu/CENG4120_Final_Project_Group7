@@ -9,15 +9,15 @@
 #include <memory>
 #include <chrono>
 #include "../Datastructure.hpp"
-#include "../PathfindingAlgorithms/AStarSearch.hpp"
+#include "../PathfindingAlgorithms/SteinerArborescence.hpp"
 
 class Router {
     private:
         // Collection of routing trees for result printing
         std::vector<std::shared_ptr<RoutingTree>> routingResults;
         
-        // Shared pathfinding instance to avoid costly recreation
-        std::unique_ptr<AStarSearch> pathfinder;
+        // Shared pathfinding instance
+        std::unique_ptr<SteinerArborescence> pathfinder;
         
         // Reusable data structures to avoid repeated allocation
         std::unordered_set<int> existingNodeIds;
@@ -44,7 +44,7 @@ class Router {
             routingResults.clear();
         }
         
-        // Clear the pathfinder to free its memory
+        // Clear the pathfinder to free memory
         void clearPathfinder() {
             pathfinder.reset(nullptr);
         }
@@ -65,7 +65,7 @@ class Router {
             // Implement congestion resolution logic here
         }
 
-        // Route a single net using A* Search
+        // Route a single net using Steiner Arborescence
         virtual std::shared_ptr<RoutingTree> routeSingleNet(Net& net, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) {
             // Check if we have enough nodes to route
             if (net.nodeIDs.size() < 2) {
@@ -113,40 +113,31 @@ class Router {
                 return nullptr;
             }
             
-            // Route from source to each sink
-            std::unordered_set<int> remainingSinks(validSinkNodeIds.begin(), validSinkNodeIds.end());
-            bool allSinksRouted = true;
-            
             // Minimal debug information
             if (verboseLogging) {
                 std::cout << "Routing net " << net.id << " with " << validSinkNodeIds.size() << " sinks" << std::endl;
             }
             
-            for (int sinkId : validSinkNodeIds) {
-                // Find path from source to this sink
-                std::vector<int> path = pathfinder->findPath(sourceNodeId, sinkId);
-                
-                if (path.empty() || path.size() < 2) {
-                    // Failed to find a path to this sink
-                    if (verboseLogging) {
-                        std::cerr << "Failed to find path from " << sourceNodeId << " to " << sinkId << std::endl;
-                    }
-                    allSinksRouted = false;
-                    continue;
+            // Find Steiner tree connecting source to all sinks
+            std::vector<int> path = pathfinder->findSteinerTree(sourceNodeId, validSinkNodeIds);
+            
+            if (path.empty()) {
+                if (verboseLogging) {
+                    std::cerr << "Failed to find Steiner tree for net " << net.id << std::endl;
                 }
-                
-                // Convert path to edges and add to routing tree (optimize with reserve)
-                routingTree->edges.reserve(routingTree->edges.size() + path.size() - 1);
-                for (size_t i = 0; i < path.size() - 1; ++i) {
-                    routingTree->edges.push_back({path[i], path[i+1]});
-                }
-                
-                // Mark this sink as routed
-                remainingSinks.erase(sinkId);
+                return nullptr;
             }
-                        
-            // Set success flag on routing tree
-            routingTree->isRouted = remainingSinks.empty();
+            
+            // Convert path to edges and add to routing tree
+            for (size_t i = 0; i < path.size() - 1; ++i) {
+                routingTree->edges.push_back({path[i], path[i+1]});
+            }
+            
+            // Update congestion for the entire path
+            pathfinder->updateCongestion(path);
+            
+            // Mark all sinks as routed (since Steiner tree connects them all)
+            routingTree->isRouted = true;
             
             return routingTree;
         }
@@ -179,31 +170,23 @@ class Router {
                 existingNodeIds.insert(node.id);
             }
             
-            // Initialize the global pathfinder once
-            if (!pathfinder) {
-                auto startTime = std::chrono::high_resolution_clock::now();
-                
-                pathfinder = std::make_unique<AStarSearch>(edges, nodes);
-                pathfinder->setTimeout(2000); // 2 second timeout per path
-                
-                // Set cost function once for all paths
-                pathfinder->setCostFunction([this](int fromId, int toId) {
-                    return this->calculateCost(fromId, toId);
-                });
-                
-                // Initialize congestion penalty factor
-                pathfinder->setCongestionPenaltyFactor(1.5);
-                
-                auto endTime = std::chrono::high_resolution_clock::now();
-                auto initTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-                std::cout << "Initialized pathfinder in " << initTime << "ms" << std::endl;
-            }
+            // Initialize the pathfinder
+            auto startTime = std::chrono::high_resolution_clock::now();
+            
+            // Create Steiner tree pathfinder
+            pathfinder = std::make_unique<SteinerArborescence>(edges, nodes);
+            pathfinder->setTimeout(5000); // 5 second timeout for tree construction
+            pathfinder->setCongestionPenaltyFactor(1.5);
+            
+            auto endTime = std::chrono::high_resolution_clock::now();
+            auto initTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
+            std::cout << "Initialized pathfinder in " << initTime << "ms" << std::endl;
             
             // Reset congestion map at the start of routing
             pathfinder->resetCongestion();
             
             // Start timing the full routing process
-            auto startTime = std::chrono::high_resolution_clock::now();
+            startTime = std::chrono::high_resolution_clock::now();
             
             // Pre-allocate vector for sink IDs to further reduce allocations
             validSinkNodeIds.reserve(100);  // Reasonable size for most nets
@@ -266,7 +249,7 @@ class Router {
             }
             
             // Report total time
-            auto endTime = std::chrono::high_resolution_clock::now();
+            endTime = std::chrono::high_resolution_clock::now();
             auto totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
             std::cout << "Complete routing of all nets took " << totalTime << "ms" << std::endl;
             

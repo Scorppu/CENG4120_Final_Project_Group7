@@ -4,14 +4,21 @@
 #include <atomic>
 #include <unordered_map>
 #include <vector>
+#include <string>
 #include "DataStructure.hpp"
 #include "Reader/Reader.cpp"
 #include "Router/Router.cpp"
 #include "Writer/Write.cpp"
 
+void printUsage(const char* programName) {
+    std::cout << "Usage: " << programName << " <device_file> <netlist_file> <output_file> [options]" << std::endl;
+    std::cout << "Options:" << std::endl;
+    std::cout << "  --verbose                        Enable verbose logging" << std::endl;
+}
+
 int main(int argc, char* argv[]) {
-    if (argc != 4) {
-        std::cerr << "Usage: <device_file> <netlist_file> <output_file>" << std::endl;
+    if (argc < 4) {
+        printUsage(argv[0]);
         return 1;
     }
 
@@ -19,10 +26,22 @@ int main(int argc, char* argv[]) {
     std::string netlistFile = argv[2];
     std::string outputFile = argv[3];
 
-    auto totalStart = std::chrono::high_resolution_clock::now();
+    // Parse command-line options
+    bool verboseLogging = false;             // Default logging level
     
-    // Minimized logging to improve performance
-    bool verboseLogging = false;
+    for (int i = 4; i < argc; i++) {
+        std::string arg = argv[i];
+        
+        if (arg == "--verbose") {
+            verboseLogging = true;
+        } else {
+            std::cerr << "Unknown option: " << arg << std::endl;
+            printUsage(argv[0]);
+            return 1;
+        }
+    }
+
+    auto totalStart = std::chrono::high_resolution_clock::now();
     
     // Create and scope all data structures
     std::vector<Node> nodes;
@@ -63,6 +82,12 @@ int main(int argc, char* argv[]) {
     // Create router 
     Router router;
     router.setVerbose(verboseLogging);
+    
+    // Print routing configuration
+    std::cout << "\n==== Routing Configuration ====\n";
+    std::cout << "Strategy: Steiner Arborescence" << std::endl;
+    std::cout << "Verbose logging: " << (verboseLogging ? "enabled" : "disabled") << std::endl;
+    std::cout << "==============================\n" << std::endl;
     
     // Perform routing
     auto routingStart = std::chrono::high_resolution_clock::now();
