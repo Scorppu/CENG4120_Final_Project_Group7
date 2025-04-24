@@ -28,6 +28,12 @@ public:
     
     // Destructor that properly cleans up resources
     ~Router();
+
+    // Calculate distance between two nodes
+    double calculateDistance(int fromId, int toId, const std::vector<Node>& nodes);
+
+    // Compute priority for a net
+    double computePriority(const Net& net, const std::vector<Node>& nodes);
     
     // Get routing results
     const std::vector<NetRoute>& getRoutingResults() const;

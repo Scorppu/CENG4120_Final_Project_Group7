@@ -154,6 +154,23 @@ double Router::calculateCost(int fromId, int toId) {
     return baseCost;
 }
 
+double Router::calculateDistance(int fromId, int toId, const std::vector<Node>& nodes) {
+    return std::sqrt(std::pow(nodes[fromId].beginX - nodes[toId].beginX, 2) + std::pow(nodes[fromId].beginY - nodes[toId].beginY, 2));
+}
+
+// 1. Define priority calculation function
+double Router::computePriority(const Net& net, const std::vector<Node>& nodes) {
+    int fanout = net.nodeIDs.size() - 1;
+    double totalDist = 0.0;
+    for (size_t j = 1; j < net.nodeIDs.size(); ++j) {
+        totalDist += calculateDistance(net.nodeIDs[0], net.nodeIDs[j], nodes);
+    }
+    double avgDist = (fanout > 0) ? totalDist / fanout : 0.0;
+    
+    // Custom formula: fanout * avgDist (prioritize high fanout and long distances)
+    return fanout * avgDist;
+}
+
 void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) {
     // Clear previous results
     clearRoutingResults();
@@ -203,11 +220,25 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
         netIndices[i] = i;
     }
     
-    // Sort nets by fanout (number of sinks) in descending order
-    std::sort(netIndices.begin(), netIndices.end(), [&nets](size_t a, size_t b) {
-        // nodeIDs[0] is the source, the rest are sinks, so size()-1 is the fanout
-        return (nets[a].nodeIDs.size() - 1) > (nets[b].nodeIDs.size() - 1);
-    });
+    // // Sort nets by fanout (number of sinks) in descending order
+    // std::sort(netIndices.begin(), netIndices.end(), [&nets](size_t a, size_t b) {
+    //     // nodeIDs[0] is the source, the rest are sinks, so size()-1 is the fanout
+    //     return (nets[a].nodeIDs.size() - 1) > (nets[b].nodeIDs.size() - 1);
+    // });
+
+
+    // 2. Precompute priorities for all nets
+    std::vector<double> priorities(nets.size());
+    for (size_t i = 0; i < nets.size(); ++i) {
+        priorities[i] = computePriority(nets[i], nodes);
+    }
+
+    // 3. Sort indices based on computed priorities (descending order)
+    std::sort(netIndices.begin(), netIndices.end(), 
+        [&priorities](size_t a, size_t b) {
+            return priorities[a] > priorities[b]; 
+        }
+    );
     
     // Show progress every 10% of nets
     size_t progressStep = std::max(size_t(1), nets.size() / 10);
