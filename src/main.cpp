@@ -5,9 +5,9 @@
 #include <unordered_map>
 #include <vector>
 #include "DataStructure.hpp"
-#include "Reader/Reader.cpp"
-#include "Router/Router.cpp"
-#include "Writer/Write.cpp"
+#include "Reader/Reader.hpp"
+#include "Router/Router.hpp"
+#include "Writer/Writer.hpp"
 
 int main(int argc, char* argv[]) {
     if (argc != 4) {
