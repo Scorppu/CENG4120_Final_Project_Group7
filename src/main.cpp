@@ -7,6 +7,7 @@
 #include "DataStructure.hpp"
 #include "Reader/Reader.cpp"
 #include "Router/Router.cpp"
+#include "Writer/Write.cpp"
 
 int main(int argc, char* argv[]) {
     if (argc != 4) {
@@ -18,8 +19,14 @@ int main(int argc, char* argv[]) {
     std::string netlistFile = argv[2];
     std::string outputFile = argv[3];
 
+    auto totalStart = std::chrono::high_resolution_clock::now();
+    
+    // Minimized logging to improve performance
+    bool verboseLogging = false;
+    
+    // Create and scope all data structures
     std::vector<Node> nodes;
-    std::vector<Edge> edges;
+    std::vector<std::vector<int>> edges;
     std::vector<Net> nets;
     
     // Parse input files
@@ -27,14 +34,61 @@ int main(int argc, char* argv[]) {
 
     auto deviceParseStart = std::chrono::high_resolution_clock::now();
     reader.parseDevice(nodes, edges);
-    std::cout << "Device parsing time: " << std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - deviceParseStart).count() << " seconds" << std::endl;
-    std::cout << reader.counter << std::endl;
-
-
+    auto deviceParseEnd = std::chrono::high_resolution_clock::now();
+    std::cout << "Nodes: " << nodes.size() << ", Edges: " << edges.size() << std::endl;
+    
+    std::cout << "Device parsing: " << std::chrono::duration_cast<std::chrono::seconds>(
+        deviceParseEnd - deviceParseStart).count() << "s" << std::endl;
 
     auto netlistParseStart = std::chrono::high_resolution_clock::now();
     reader.parseNetlist(nets);
-    std::cout << "Netlist parsing time: " << std::chrono::duration<double>(std::chrono::high_resolution_clock::now() - netlistParseStart).count() << " seconds" << std::endl;
+    auto netlistParseEnd = std::chrono::high_resolution_clock::now();
+    
+    std::cout << "Netlist parsing: " << std::chrono::duration_cast<std::chrono::seconds>(
+        netlistParseEnd - netlistParseStart).count() << "s" << std::endl;
+    std::cout << "Nets: " << nets.size() << std::endl;
+    
+    // Estimate memory footprint and pre-allocate if possible
+    std::cout << "Estimating memory usage..." << std::endl;
+    size_t estimatedNodeMemory = nodes.size() * sizeof(Node);
+    size_t estimatedEdgeMemory = 0;
+    for (const auto& edge : edges) {
+        estimatedEdgeMemory += edge.size() * sizeof(int) + sizeof(std::vector<int>);
+    }
+    size_t estimatedNetMemory = nets.size() * sizeof(Net);
+    std::cout << "Estimated memory usage: " 
+              << (estimatedNodeMemory + estimatedEdgeMemory + estimatedNetMemory) / (1024 * 1024) 
+              << "MB" << std::endl;
+    
+    // Create router 
+    Router router;
+    router.setVerbose(verboseLogging);
+    
+    // Perform routing
+    auto routingStart = std::chrono::high_resolution_clock::now();
+    router.routeAllNets(nets, edges, nodes);
+    auto routingEnd = std::chrono::high_resolution_clock::now();
+    std::cout << "Total routing time: " << std::chrono::duration_cast<std::chrono::seconds>(
+        routingEnd - routingStart).count() << "s" << std::endl;
+        
+    // Print routing results
+    router.printRoutingResults();
+    
+    // Write output to file
+    Writer writer(outputFile);
+    writer.setRoutingResults(&router.getRoutingResults());
+    writer.setOriginalNets(&nets);
+    writer.writeOutput();
+    
+    // Clean up resources
+    if (verboseLogging) {
+        std::cout << "Cleaning up resources..." << std::endl;
+    }
+    router.clearAll();
+    
+    auto totalEnd = std::chrono::high_resolution_clock::now();
+    std::cout << "Total program time: " << std::chrono::duration_cast<std::chrono::seconds>(
+        totalEnd - totalStart).count() << "s" << std::endl;
 
     return 0;
 }
