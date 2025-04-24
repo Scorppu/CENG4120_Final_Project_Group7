@@ -110,7 +110,8 @@ NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& e
     
     for (int sinkId : validSinkNodeIds) {
         // Find path from source to this sink
-        std::vector<int> path = pathfinder->findPath(sourceNodeId, sinkId);
+        std::vector<int> path;
+        pathfinder->findPath(sourceNodeId, sinkId, path);
         
         if (path.empty() || path.size() < 2) {
             // Failed to find a path to this sink

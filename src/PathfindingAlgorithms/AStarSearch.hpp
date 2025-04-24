@@ -18,7 +18,7 @@ public:
     
     // Main pathfinding method
     // Returns a vector of node IDs representing the path from source to target
-    std::vector<int> findPath(int sourceNodeId, int targetNodeId);
+    void findPath(int sourceNodeId, int targetNodeId, std::vector<int>& path);
     
     // Find paths from a source to multiple targets
     // Returns a vector of paths, one for each target
@@ -84,13 +84,19 @@ private:
     double congestionAwareCost(int fromId, int toId);
     
     // Reconstruct path from came_from map
-    std::vector<int> reconstructPath(
+    void reconstructPath(
         const std::unordered_map<int, int>& cameFrom,
-        int current
+        int current,
+        std::vector<int>& path
     );
     
     // Get neighbors of a node - optimized to return const reference
     const std::vector<int>& getNeighbors(int nodeId);
+
+    std::unordered_map<int, double> gScore;
+    std::unordered_map<int, double> fScore;
+    std::unordered_map<int, int> cameFrom;  
+    std::unordered_set<int> closedSet; 
 };
 
 #endif // ASTAR_SEARCH_HPP 

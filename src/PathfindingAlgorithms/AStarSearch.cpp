@@ -162,47 +162,21 @@ double AStarSearch::getCongestion(int nodeId) const {
 }
 
 // Reconstruct path from the came_from map - OPTIMIZED
-std::vector<int> AStarSearch::reconstructPath(
-    const std::unordered_map<int, int>& cameFrom,
-    int current
-) {
-    // Estimate path size to reduce reallocations
-    std::vector<int> path;
-    path.reserve(cameFrom.size() + 1);  // Reserve space for worst case
-    
-    // Count path length first to avoid reversal
-    int pathLength = 1;  // Start with 1 for the target node
-    int temp = current;
-    auto it = cameFrom.find(temp);
-    while (it != cameFrom.end()) {
-        pathLength++;
-        temp = it->second;
-        it = cameFrom.find(temp);
+void AStarSearch::reconstructPath(const std::unordered_map<int, int>& cameFrom, int current, std::vector<int>& path) {
+    while (cameFrom.find(current) != cameFrom.end()) {
+        path.push_back(current);
+        current = cameFrom.at(current);
     }
-    
-    // Pre-allocate the correctly sized vector
-    path.resize(pathLength);
-    
-    // Fill the path in the correct order (from source to target)
-    int index = pathLength - 1;
-    path[index--] = current;
-    
-    // Use operator[] instead of at() for better performance
-    auto findIt = cameFrom.find(current);
-    while (findIt != cameFrom.end()) {
-        current = findIt->second;
-        path[index--] = current;
-        findIt = cameFrom.find(current);
-    }
-    
-    return path;
+    path.push_back(current); // add the start node
+    std::reverse(path.begin(), path.end());
 }
 
+
 // Main pathfinding method - OPTIMIZED
-std::vector<int> AStarSearch::findPath(int sourceNodeId, int targetNodeId) {
+void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>& path) {
     // Special case for when source and target are the same
     if (sourceNodeId == targetNodeId) {
-        return {sourceNodeId};
+        return;
     }
     
     // Start timing
@@ -213,10 +187,10 @@ std::vector<int> AStarSearch::findPath(int sourceNodeId, int targetNodeId) {
     std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>> openSet;
     
     // Maps to store metadata - consider dense arrays if node IDs are dense and consecutive
-    std::unordered_map<int, double> gScore; // Cost from start to node
-    std::unordered_map<int, double> fScore; // Estimated total cost
-    std::unordered_map<int, int> cameFrom;  // Parent pointers
-    std::unordered_set<int> closedSet;      // Nodes already evaluated
+    gScore.clear(); // Cost from start to node
+    fScore.clear(); // Estimated total cost
+    cameFrom.clear();  // Parent pointers
+    closedSet.clear();      // Nodes already evaluated
     
     // Initialize with start node
     openSet.push({0, sourceNodeId});  // <f_score, node_id>
@@ -252,7 +226,8 @@ std::vector<int> AStarSearch::findPath(int sourceNodeId, int targetNodeId) {
         
         // If we've reached the target, reconstruct the path
         if (current == targetNodeId) {
-            return reconstructPath(cameFrom, current);
+            reconstructPath(cameFrom, current, path);
+            return;
         }
         
         // Skip if already evaluated
@@ -291,7 +266,7 @@ std::vector<int> AStarSearch::findPath(int sourceNodeId, int targetNodeId) {
     }
     
     // If we get here, no path was found
-    return std::vector<int>();
+    return;
 }
 
 // Find paths from a source to multiple targets
@@ -318,7 +293,7 @@ std::vector<std::vector<int>> AStarSearch::findPaths(int sourceNodeId, const std
         currentTarget = *bestTargetIt;
         
         // Find path to this target
-        path = findPath(sourceNodeId, currentTarget);
+        findPath(sourceNodeId, currentTarget, path);
         
         // Add the path to our results
         paths.push_back(path);
