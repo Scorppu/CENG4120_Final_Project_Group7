@@ -68,6 +68,7 @@ int main(int argc, char* argv[]) {
     auto routingStart = std::chrono::high_resolution_clock::now();
     router.routeAllNets(nets, edges, nodes);
     auto routingEnd = std::chrono::high_resolution_clock::now();
+    
     std::cout << "Total routing time: " << std::chrono::duration_cast<std::chrono::seconds>(
         routingEnd - routingStart).count() << "s" << std::endl;
         

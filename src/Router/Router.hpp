@@ -18,10 +18,6 @@ private:
     // Reusable data structures to avoid repeated allocation
     std::unordered_set<int> existingNodeIds;
     std::vector<int> validSinkNodeIds;
-
-    // Verbosity level for logging
-    bool verboseLogging = false;
-    
 public:
     // Constructor
     Router();

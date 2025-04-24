@@ -41,11 +41,6 @@ void Router::clearAll() {
     clearPathfinder();
 }
 
-// Set verbosity level
-void Router::setVerbose(bool verbose) {
-    verboseLogging = verbose;
-}
-
 // Resolve congestions (Rip up and reroute)
 void Router::resolveCongestion() {
     // Implement congestion resolution logic here
@@ -55,14 +50,6 @@ void Router::resolveCongestion() {
 NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) {
     // Create a NetRoute object to store the results
     NetRoute netRoute(net.id, net.name);
-    
-    // Check if we have enough nodes to route
-    if (net.nodeIDs.size() < 2) {
-        if (verboseLogging) {
-            std::cerr << "Net " << net.id << " (" << net.name << ") has fewer than 2 nodes, skipping" << std::endl;
-        }
-        return netRoute; // Return empty NetRoute with isRouted = false
-    }
 
     // In the netlist format from design1.netlist:
     // First node is the source, all others are sinks
@@ -71,10 +58,6 @@ NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& e
     
     // Verify source node exists in the graph
     if (existingNodeIds.find(sourceNodeId) == existingNodeIds.end()) {
-        if (verboseLogging) {
-            std::cerr << "Source node " << sourceNodeId << " for net " << net.id 
-                    << " (" << net.name << ") does not exist in the graph, skipping" << std::endl;
-        }
         return netRoute; // Return empty NetRoute with isRouted = false
     }
     
@@ -85,17 +68,10 @@ NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& e
     for (int sinkId : sinkNodeIds) {
         if (existingNodeIds.find(sinkId) != existingNodeIds.end()) {
             validSinkNodeIds.push_back(sinkId);
-        } else if (verboseLogging) {
-            std::cerr << "Sink node " << sinkId << " for net " << net.id 
-                    << " does not exist in the graph, skipping this sink" << std::endl;
-        }
+        } 
     }
     
     if (validSinkNodeIds.empty()) {
-        if (verboseLogging) {
-            std::cerr << "No valid sink nodes for net " << net.id 
-                    << " (" << net.name << "), skipping" << std::endl;
-        }
         return netRoute; // Return empty NetRoute with isRouted = false
     }
     
@@ -103,10 +79,6 @@ NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& e
     std::unordered_set<int> remainingSinks(validSinkNodeIds.begin(), validSinkNodeIds.end());
     bool allSinksRouted = true;
     
-    // Minimal debug information
-    if (verboseLogging) {
-        std::cout << "Routing net " << net.id << " with " << validSinkNodeIds.size() << " sinks" << std::endl;
-    }
     
     for (int sinkId : validSinkNodeIds) {
         // Find path from source to this sink
@@ -115,9 +87,6 @@ NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& e
         
         if (path.empty() || path.size() < 2) {
             // Failed to find a path to this sink
-            if (verboseLogging) {
-                std::cerr << "Failed to find path from " << sourceNodeId << " to " << sinkId << std::endl;
-            }
             allSinksRouted = false;
             continue;
         }
@@ -140,25 +109,11 @@ NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& e
     return netRoute;
 }
 
-// Helper method to calculate cost between nodes (includes congestion awareness)
-double Router::calculateCost(int fromId, int toId) {
-    // Base cost of traversing between nodes
-    const double baseCost = 1.0;
-    
-    // Add congestion awareness if pathfinder is initialized
-    if (pathfinder) {
-        double congestion = pathfinder->getCongestion(toId);
-        return baseCost + (congestion * 0.5); // Apply 50% weight to current congestion
-    }
-    
-    return baseCost;
-}
-
 double Router::calculateDistance(int fromId, int toId, const std::vector<Node>& nodes) {
     return std::sqrt(std::pow(nodes[fromId].beginX - nodes[toId].beginX, 2) + std::pow(nodes[fromId].beginY - nodes[toId].beginY, 2));
 }
 
-// 1. Define priority calculation function
+// Define priority calculation function
 double Router::computePriority(const Net& net, const std::vector<Node>& nodes) {
     int fanout = net.nodeIDs.size() - 1;
     double totalDist = 0.0;
@@ -192,11 +147,6 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
         pathfinder = std::make_unique<AStarSearch>(edges, nodes);
         pathfinder->setTimeout(2000); // 2 second timeout per path
         
-        // Set cost function once for all paths
-        pathfinder->setCostFunction([this](int fromId, int toId) {
-            return this->calculateCost(fromId, toId);
-        });
-        
         // Initialize congestion penalty factor
         pathfinder->setCongestionPenaltyFactor(5.0);
         
@@ -220,13 +170,6 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
         netIndices[i] = i;
     }
     
-    // // Sort nets by fanout (number of sinks) in descending order
-    // std::sort(netIndices.begin(), netIndices.end(), [&nets](size_t a, size_t b) {
-    //     // nodeIDs[0] is the source, the rest are sinks, so size()-1 is the fanout
-    //     return (nets[a].nodeIDs.size() - 1) > (nets[b].nodeIDs.size() - 1);
-    // });
-
-
     // 2. Precompute priorities for all nets
     std::vector<double> priorities(nets.size());
     for (size_t i = 0; i < nets.size(); ++i) {
@@ -250,12 +193,6 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
         // Report progress occasionally
         if (idx % progressStep == 0) {
             std::cout << "Routing progress: " << (idx * 100 / nets.size()) << "%" << std::endl;
-            
-            if (verboseLogging) {
-                std::cout << "  Current net: " << nets[i].id 
-                        << " (" << nets[i].name << ") with fanout " 
-                        << (nets[i].nodeIDs.size() - 1) << std::endl;
-            }
         }
         
         // Route the net and store the result
@@ -269,7 +206,7 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
             // Extract the full path from edges
             std::vector<int> path;
             path.reserve(result.edges.size() + 1);
-            
+
             // Add the first node of the first edge
             if (!result.edges.empty()) {
                 path.push_back(result.edges[0].first);
@@ -281,7 +218,7 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
             }
             
             // Update congestion along this path
-            pathfinder->updateCongestion(path);
+            pathfinder->updateCongestion(path, 2.0);
         }
     }
     
@@ -289,34 +226,6 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
     auto endTime = std::chrono::high_resolution_clock::now();
     auto totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
     std::cout << "Complete routing of all nets took " << totalTime << "ms" << std::endl;
-    
-    // Report high-fanout net performance
-    if (verboseLogging) {
-        std::cout << "\nHigh-fanout net routing performance:" << std::endl;
-        const size_t TOP_NETS = std::min(size_t(10), nets.size());
-        
-        for (size_t i = 0; i < TOP_NETS; ++i) {
-            size_t netIdx = netIndices[i];
-            bool found = false;
-            
-            // Find the corresponding routing result
-            for (const auto& route : routingResults) {
-                if (route.netId == nets[netIdx].id) {
-                    std::cout << "  Net " << nets[netIdx].id << " (" << nets[netIdx].name 
-                            << ") with fanout " << (nets[netIdx].nodeIDs.size() - 1)
-                            << ": " << (route.isRouted ? "SUCCESS" : "FAILED") << std::endl;
-                    found = true;
-                    break;
-                }
-            }
-            
-            if (!found) {
-                std::cout << "  Net " << nets[netIdx].id << " (" << nets[netIdx].name 
-                        << ") with fanout " << (nets[netIdx].nodeIDs.size() - 1)
-                        << ": NOT ROUTED" << std::endl;
-            }
-        }
-    }
 }
 
 // Print routing results
@@ -333,16 +242,6 @@ void Router::printRoutingResults() const {
     
     std::cout << "Successfully routed: " << successfullyRouted << std::endl;
     std::cout << "Success rate: " << (routingResults.empty() ? 0 : (successfullyRouted * 100.0 / routingResults.size())) << "%" << std::endl;
-    
-    // Only print detailed per-net results if verbose logging is enabled
-    if (verboseLogging) {
-        for (const auto& route : routingResults) {
-            std::cout << "Net " << route.netId << ": " 
-                    << (route.isRouted ? "Successfully routed" : "Failed to route")
-                    << " (" << route.edges.size() << " connections)" << std::endl;
-        }
-    }
-    
     std::cout << "==========================\n" << std::endl;
 }
 

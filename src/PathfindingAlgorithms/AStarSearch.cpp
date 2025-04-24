@@ -30,11 +30,7 @@ AStarSearch::AStarSearch(const std::vector<std::vector<int>>& edges, const std::
     heuristicFunc = [this](int currentId, int targetId) {
         return this->defaultHeuristic(currentId, targetId);
     };
-    
-    costFunc = [this](int fromId, int toId) {
-        return this->congestionAwareCost(fromId, toId);
-    };
-    
+  
     // Initialize neighbor cache
     buildNeighborCache();
     
@@ -231,7 +227,7 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
         }
         
         // Skip if already evaluated
-        if (closedSet.find(current) != closedSet.end()) {
+        if (closedSet.count(current)) {
             continue;
         }
         
@@ -241,12 +237,12 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
         // Process all neighbors - OPTIMIZED to avoid edge tracking overhead
         for (int neighbor : getNeighbors(current)) {
             // Skip if already evaluated
-            if (closedSet.find(neighbor) != closedSet.end()) {
+            if (closedSet.count(neighbor)) {
                 continue;
             }
             
             // Calculate tentative gScore using the congestion-aware cost function
-            tentativeGScore = gScore[current] + costFunc(current, neighbor);
+            tentativeGScore = gScore[current] + congestionAwareCost(current, neighbor);
             
             // If this path is better than any previous one
             if (gScore.find(neighbor) == gScore.end() || tentativeGScore < gScore[neighbor]) {
@@ -270,52 +266,47 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
 }
 
 // Find paths from a source to multiple targets
-std::vector<std::vector<int>> AStarSearch::findPaths(int sourceNodeId, const std::vector<int>& targetNodeIds) {
-    std::vector<std::vector<int>> paths;
-    paths.reserve(targetNodeIds.size());
+// std::vector<std::vector<int>> AStarSearch::findPaths(int sourceNodeId, const std::vector<int>& targetNodeIds) {
+//     std::vector<std::vector<int>> paths;
+//     paths.reserve(targetNodeIds.size());
     
-    // Create a copy of all target IDs for processing
-    std::vector<int> remainingTargets = targetNodeIds;
+//     // Create a copy of all target IDs for processing
+//     std::vector<int> remainingTargets = targetNodeIds;
 
-    // Initialize variables
-    int currentTarget;
-    std::vector<int> path;
+//     // Initialize variables
+//     int currentTarget;
+//     std::vector<int> path;
     
-    // Process targets one by one, updating congestion after each path
-    while (!remainingTargets.empty()) {
-        // Find the nearest target based on heuristic distance
-        auto bestTargetIt = std::min_element(remainingTargets.begin(), remainingTargets.end(),
-            [this, sourceNodeId](int target1, int target2) {
-                return heuristicFunc(sourceNodeId, target1) < heuristicFunc(sourceNodeId, target2);
-            });
+//     // Process targets one by one, updating congestion after each path
+//     while (!remainingTargets.empty()) {
+//         // Find the nearest target based on heuristic distance
+//         auto bestTargetIt = std::min_element(remainingTargets.begin(), remainingTargets.end(),
+//             [this, sourceNodeId](int target1, int target2) {
+//                 return heuristicFunc(sourceNodeId, target1) < heuristicFunc(sourceNodeId, target2);
+//             });
         
-        // Get the selected target
-        currentTarget = *bestTargetIt;
+//         // Get the selected target
+//         currentTarget = *bestTargetIt;
         
-        // Find path to this target
-        findPath(sourceNodeId, currentTarget, path);
+//         // Find path to this target
+//         findPath(sourceNodeId, currentTarget, path);
         
-        // Add the path to our results
-        paths.push_back(path);
+//         // Add the path to our results
+//         paths.push_back(path);
         
-        // Update congestion map with this path
-        if (!path.empty()) {
-            updateCongestion(path);
-        }
+//         // Update congestion map with this path
+//         if (!path.empty()) {
+//             updateCongestion(path, 5.0);
+//         }
         
-        // Remove this target from the remaining list
-        remainingTargets.erase(bestTargetIt);
-    }
+//         // Remove this target from the remaining list
+//         remainingTargets.erase(bestTargetIt);
+//     }
     
-    return paths;
-}
+//     return paths;
+// }
 
 // Set custom heuristic function
 void AStarSearch::setHeuristicFunction(std::function<double(int, int)> func) {
     heuristicFunc = func;
 }
-
-// Set custom cost function
-void AStarSearch::setCostFunction(std::function<double(int, int)> func) {
-    costFunc = func;
-} 
