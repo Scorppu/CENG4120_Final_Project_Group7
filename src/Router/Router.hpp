@@ -4,6 +4,7 @@
 #include <vector>
 #include <memory>
 #include <unordered_set>
+#include <chrono>
 #include "../Datastructure.hpp"
 #include "../PathfindingAlgorithms/AStarSearch.hpp"
 
@@ -18,6 +19,14 @@ private:
     // Reusable data structures to avoid repeated allocation
     std::unordered_set<int> existingNodeIds;
     std::vector<int> validSinkNodeIds;
+    
+    // Design-specific settings
+    int designNumber;     // Current design number (1-5)
+    int timeoutSeconds;   // Global timeout in seconds
+    
+    // Program start time
+    std::chrono::time_point<std::chrono::steady_clock> programStartTime;
+    bool hasProgramStartTime;
 public:
     // Constructor
     Router();
@@ -45,6 +54,15 @@ public:
 
     // Set verbosity level
     void setVerbose(bool verbose);
+    
+    // Set the design number to adjust parameters accordingly
+    void setDesignNumber(int number);
+    
+    // Set the global timeout in seconds
+    void setTimeout(int seconds);
+    
+    // Set the program start time to calculate total elapsed time
+    void setProgramStartTime(std::chrono::time_point<std::chrono::steady_clock> startTime);
 
     // Resolve congestions (Rip up and reroute)
     virtual void resolveCongestion();

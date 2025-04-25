@@ -13,7 +13,7 @@
 #include "Router.hpp"
 
 // Constructor
-Router::Router() : pathfinder(nullptr) {}
+Router::Router() : pathfinder(nullptr), designNumber(1), timeoutSeconds(249), hasProgramStartTime(false) {}
 
 // Destructor that properly cleans up resources
 Router::~Router() {
@@ -39,6 +39,22 @@ void Router::clearPathfinder() {
 void Router::clearAll() {
     clearRoutingResults();
     clearPathfinder();
+}
+
+// Set the design number to adjust parameters accordingly
+void Router::setDesignNumber(int number) {
+    designNumber = number;
+}
+
+// Set the global timeout in seconds
+void Router::setTimeout(int seconds) {
+    timeoutSeconds = seconds;
+}
+
+// Set the program start time
+void Router::setProgramStartTime(std::chrono::time_point<std::chrono::steady_clock> startTime) {
+    programStartTime = startTime;
+    hasProgramStartTime = true;
 }
 
 // Resolve congestions (Rip up and reroute)
@@ -140,27 +156,66 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
         existingNodeIds.insert(node.id);
     }
     
+    // Record the routing start time
+    auto routingStartTime = std::chrono::steady_clock::now();
+    
     // Initialize the global pathfinder once
     if (!pathfinder) {
         auto startTime = std::chrono::steady_clock::now();
         
         // Use new with manual pointer assignment instead of make_unique for C++11
         pathfinder.reset(new AStarSearch(edges, nodes));
-        pathfinder->setTimeout(2000); // 2 second timeout per path
+        
+        // Set per-path timeout based on design size
+        int pathTimeoutMs = 2000; // Default 2 seconds per path
+        
+        if (designNumber == 5) {
+            pathTimeoutMs = 1000; // Reduce path timeout for design 5
+        }
+        
+        pathfinder->setTimeout(pathTimeoutMs);
+        
+        // Set congestion penalty factor based on design
+        double congestionFactor = 5.0; // Default
+        double initialCongestion = 2.0; // Default
+        
+        switch (designNumber) {
+            case 1:
+                congestionFactor = 4.0;
+                initialCongestion = 5;
+                break;
+            case 2:
+                congestionFactor = 5.0;
+                initialCongestion = 5;
+                break;
+            case 3:
+                congestionFactor = 6.0;
+                initialCongestion = 5;
+                break;
+            case 4:
+                congestionFactor = 7.0;
+                initialCongestion = 5;
+                break;
+            case 5:
+                congestionFactor = 10.0;
+                initialCongestion = 10;
+                break;
+            default:
+                // Use defaults
+                break;
+        }
         
         // Initialize congestion penalty factor
-        pathfinder->setCongestionPenaltyFactor(5.0);
+        pathfinder->setCongestionPenaltyFactor(congestionFactor);
         
         auto endTime = std::chrono::steady_clock::now();
         auto initTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
         std::cout << "Initialized pathfinder in " << initTime << "ms" << std::endl;
+        std::cout << "Using congestion factor: " << congestionFactor << " for design " << designNumber << std::endl;
     }
     
     // Reset congestion map at the start of routing
     pathfinder->resetCongestion();
-    
-    // Start timing the full routing process
-    auto startTime = std::chrono::steady_clock::now();
     
     // Pre-allocate vector for sink IDs to further reduce allocations
     validSinkNodeIds.reserve(100);  // Reasonable size for most nets
@@ -186,14 +241,48 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
     
     // Show progress every 10% of nets
     size_t progressStep = std::max(size_t(1), nets.size() / 10);
+    bool timeoutOccurred = false;
     
     // Route nets in order of descending fanout
     for (size_t idx = 0; idx < netIndices.size(); ++idx) {
+        // Check for global timeout using total program time if available
+        if (hasProgramStartTime) {
+            auto currentTime = std::chrono::steady_clock::now();
+            auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+                currentTime - programStartTime).count();
+                
+            // Leave at least 1 second for output and cleanup
+            if (elapsedSeconds >= (timeoutSeconds - 1)) {
+                std::cout << "Global timeout reached (total program time: " << elapsedSeconds 
+                        << " seconds). Stopping routing." << std::endl;
+                timeoutOccurred = true;
+                break;
+            }
+        } else {
+            // Fall back to routing time if program start time wasn't set
+            auto currentTime = std::chrono::steady_clock::now();
+            auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+                currentTime - routingStartTime).count();
+                
+            if (elapsedSeconds >= timeoutSeconds) {
+                std::cout << "Routing timeout reached after " << elapsedSeconds 
+                        << " seconds. Stopping routing." << std::endl;
+                timeoutOccurred = true;
+                break;
+            }
+        }
+        
         size_t i = netIndices[idx];
         
         // Report progress occasionally
         if (idx % progressStep == 0) {
-            std::cout << "Routing progress: " << (idx * 100 / nets.size()) << "%" << std::endl;
+            auto now = std::chrono::steady_clock::now();
+            auto elapsedSeconds = hasProgramStartTime ? 
+                std::chrono::duration_cast<std::chrono::seconds>(now - programStartTime).count() :
+                std::chrono::duration_cast<std::chrono::seconds>(now - routingStartTime).count();
+                
+            std::cout << "Routing progress: " << (idx * 100 / nets.size()) << "% (Time: " 
+                    << elapsedSeconds << "s)" << std::endl;
         }
         
         // Route the net and store the result
@@ -218,15 +307,26 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
                 path.push_back(edge.second);
             }
             
-            // Update congestion along this path
-            pathfinder->updateCongestion(path, 2.0);
+            // Update congestion along this path - use design-specific initial congestion
+            double initialCongestion = 2.0;
+            switch (designNumber) {
+                case 1: initialCongestion = 5; break;
+                case 2: initialCongestion = 5; break;
+                case 3: initialCongestion = 5; break;
+                case 4: initialCongestion = 5; break;
+                case 5: initialCongestion = 10; break;
+                default: break;
+            }
+            
+            pathfinder->updateCongestion(path, initialCongestion);
         }
     }
     
     // Report total time
     auto endTime = std::chrono::steady_clock::now();
-    auto totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
-    std::cout << "Complete routing of all nets took " << totalTime << "ms" << std::endl;
+    auto routingTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - routingStartTime).count();
+    std::cout << "Routing " << (timeoutOccurred ? "(stopped by timeout)" : "of all nets") 
+              << " took " << routingTime << "ms" << std::endl;
 }
 
 // Print routing results

@@ -4,10 +4,26 @@
 #include <atomic>
 #include <unordered_map>
 #include <vector>
+#include <regex>
+#include <string>
 #include "DataStructure.hpp"
 #include "Reader/Reader.hpp"
 #include "Router/Router.hpp"
 #include "Writer/Writer.hpp"
+
+// Helper function to extract design number from filename
+int extractDesignNumber(const std::string& filename) {
+    // Use regex to extract design number from patterns like "design1.netlist" or "design_1.netlist"
+    std::regex designPattern("design[_]?(\\d+)");
+    std::smatch matches;
+    
+    if (std::regex_search(filename, matches, designPattern) && matches.size() > 1) {
+        return std::stoi(matches[1].str());
+    }
+    
+    // Default to design 1 if no match found
+    return 1;
+}
 
 int main(int argc, char* argv[]) {
     if (argc != 4) {
@@ -63,6 +79,25 @@ int main(int argc, char* argv[]) {
     // Create router 
     Router router;
     // SteinerTreeRouter stRouter;
+    
+    // Extract design number from netlist filename and set in router
+    int designNumber = extractDesignNumber(netlistFile);
+    std::cout << "Detected design number: " << designNumber << std::endl;
+    
+    // Set design-specific parameters
+    router.setDesignNumber(designNumber);
+    
+    // Pass the program start time to the router for total time calculation
+    router.setProgramStartTime(totalStart);
+    
+    // Set global timeout (default 249 seconds, but can be adjusted)
+    if (designNumber == 5) {
+        // For design 5, we need to stay under 250s total time
+        router.setTimeout(249);
+    } else {
+        // For other designs, set a more generous timeout
+        router.setTimeout(1000);
+    }
 
     // Perform routing
     auto routingStart = std::chrono::steady_clock::now();
