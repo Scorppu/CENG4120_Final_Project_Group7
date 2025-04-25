@@ -9,33 +9,34 @@
 #include <cmath>
 #include "../Datastructure.hpp"
 
-// Class for Steiner Tree node (internal representation)
-class SteinerNode {
-public:
-    int x, y;             // Node coordinates
-    int id;               // Node ID from input graph (if sink node, -1 for Steiner points)
-    bool isSink;          // Whether this is a sink node
-    bool isSteinerPoint;  // Whether this is a Steiner point
-    std::vector<std::shared_ptr<SteinerNode>> children; // Children in the Steiner tree
+// Forward declaration for nested struct
+struct SteinerNode;
 
-    SteinerNode(int x, int y, int id = -1, bool isSink = false)
-        : x(x), y(y), id(id), isSink(isSink), isSteinerPoint(!isSink) {}
+// A tree structure for the Steiner arborescence
+struct SteinerTree {
+    std::shared_ptr<SteinerNode> root;
+    
+    SteinerTree() : root(nullptr) {}
+    explicit SteinerTree(std::shared_ptr<SteinerNode> root) : root(root) {}
 };
 
-// Class for a Steiner tree
-class SteinerTree {
-public:
-    std::shared_ptr<SteinerNode> root; // Root of this tree
+// A node in the Steiner tree
+struct SteinerNode {
+    int x;
+    int y;
+    int id;  // Corresponding node ID in the original graph, -1 if it's a pure Steiner point
+    bool isSink;
+    std::vector<std::shared_ptr<SteinerNode>> children;
     
-    SteinerTree(std::shared_ptr<SteinerNode> root = nullptr) : root(root) {}
+    SteinerNode(int x, int y, int id = -1, bool isSink = false) 
+        : x(x), y(y), id(id), isSink(isSink) {}
 };
 
 // Main class implementing Rectilinear Steiner Arborescence (RSA) algorithm
 class SteinerArborescence {
 public:
     // Constructor
-    SteinerArborescence(const std::vector<std::vector<int>>& edges, 
-                        const std::vector<Node>& nodes);
+    SteinerArborescence(const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes);
     
     // Find a Steiner arborescence connecting source to multiple sinks
     std::vector<int> findSteinerTree(int sourceNodeId, const std::vector<int>& sinkNodeIds);
@@ -75,26 +76,29 @@ private:
     // Timeout in milliseconds
     int timeoutMs;
     
+    // Helper method to get node coordinates by ID
+    std::pair<int, int> getNodeCoordinates(int nodeId);
+    
+    // Helper method to find the node in the graph closest to the given coordinates
+    int findClosestNode(int x, int y);
+    
+    // Helper method to validate if a node is legal for routing
+    bool isLegalNode(int nodeId) const;
+    
+    // Helper method to find the closest legal node to the given coordinates
+    int findClosestLegalNode(int x, int y);
+    
+    // Connect two nodes with a rectilinear path (Manhattan distance)
+    std::vector<int> connectNodesRectilinear(int fromId, int toId);
+    
     // Internal implementation of the RSA algorithm
     SteinerTree buildRectilinearSteinerArborescence(
         int sourceX, int sourceY, 
         const std::vector<std::pair<int, int>>& sinkCoordinates,
         const std::vector<int>& sinkIds);
     
-    // Helper method to merge two Steiner trees
-    SteinerTree mergeTrees(const SteinerTree& tree1, const SteinerTree& tree2);
-    
-    // Helper method to find the node in the graph closest to the given coordinates
-    int findClosestNode(int x, int y);
-    
     // Convert Steiner tree to a path in the original graph
     std::vector<int> steinerTreeToPath(const SteinerTree& tree, int sourceNodeId);
-    
-    // Connect two nodes with a rectilinear path (Manhattan distance)
-    std::vector<int> connectNodesRectilinear(int fromId, int toId);
-    
-    // Helper method to get node coordinates by ID
-    std::pair<int, int> getNodeCoordinates(int nodeId);
 };
 
 #endif // STEINER_ARBORESCENCE_HPP 

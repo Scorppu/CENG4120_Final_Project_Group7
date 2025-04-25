@@ -10,14 +10,19 @@
 #include <chrono>
 #include "../Datastructure.hpp"
 #include "../PathfindingAlgorithms/SteinerArborescence.hpp"
+#include "../PathfindingAlgorithms/SteinerSALT.hpp"
 
 class Router {
     private:
         // Collection of routing trees for result printing
         std::vector<std::shared_ptr<RoutingTree>> routingResults;
         
-        // Shared pathfinding instance
-        std::unique_ptr<SteinerArborescence> pathfinder;
+        // Shared pathfinding instance - can be either SteinerArborescence or SteinerSALT
+        std::unique_ptr<SteinerArborescence> pathfinderArborescence;
+        std::unique_ptr<SteinerSALT> pathfinderSALT;
+        
+        // Flag to indicate which algorithm to use
+        bool useSALT = true;
         
         // Reusable data structures to avoid repeated allocation
         std::unordered_set<int> existingNodeIds;
@@ -26,8 +31,17 @@ class Router {
         // Verbosity level for logging
         bool verboseLogging = false;
         
+        // Timeout for pathfinder
+        int pathfinderTimeout = 0;
+        
+        // Congestion factor for pathfinder
+        double pathfinderCongestionFactor = 0;
+        
+        // Trade-off parameter for SALT
+        double epsilon = 0.5;
+        
     public:
-        Router() : pathfinder(nullptr) {}
+        Router() : pathfinderArborescence(nullptr), pathfinderSALT(nullptr) {}
         
         // Destructor that properly cleans up resources
         ~Router() {
@@ -46,7 +60,8 @@ class Router {
         
         // Clear the pathfinder to free memory
         void clearPathfinder() {
-            pathfinder.reset(nullptr);
+            pathfinderArborescence.reset(nullptr);
+            pathfinderSALT.reset(nullptr);
         }
         
         // Clear all resources to free memory
@@ -59,13 +74,48 @@ class Router {
         void setVerbose(bool verbose) {
             verboseLogging = verbose;
         }
+        
+        // Set pathfinder timeout in milliseconds
+        void setTimeout(int timeoutMs) {
+            pathfinderTimeout = timeoutMs;
+            if (pathfinderArborescence) {
+                pathfinderArborescence->setTimeout(timeoutMs);
+            }
+            if (pathfinderSALT) {
+                pathfinderSALT->setTimeout(timeoutMs);
+            }
+        }
+        
+        // Set congestion penalty factor
+        void setCongestionFactor(double factor) {
+            pathfinderCongestionFactor = factor;
+            if (pathfinderArborescence) {
+                pathfinderArborescence->setCongestionPenaltyFactor(factor);
+            }
+            if (pathfinderSALT) {
+                pathfinderSALT->setCongestionPenaltyFactor(factor);
+            }
+        }
+        
+        // Set epsilon (trade-off parameter) for SALT
+        void setEpsilon(double eps) {
+            epsilon = eps;
+            if (pathfinderSALT) {
+                pathfinderSALT->setEpsilon(eps);
+            }
+        }
+        
+        // Set which algorithm to use
+        void setUseSALT(bool use) {
+            useSALT = use;
+        }
 
         // Resolve congestions (Rip up and reroute)
         virtual void resolveCongestion() {
             // Implement congestion resolution logic here
         }
 
-        // Route a single net using Steiner Arborescence
+        // Route a single net using Steiner Arborescence or SALT
         virtual std::shared_ptr<RoutingTree> routeSingleNet(Net& net, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) {
             // Check if we have enough nodes to route
             if (net.nodeIDs.size() < 2) {
@@ -119,13 +169,34 @@ class Router {
             }
             
             // Find Steiner tree connecting source to all sinks
-            std::vector<int> path = pathfinder->findSteinerTree(sourceNodeId, validSinkNodeIds);
+            std::vector<int> path;
+            if (useSALT && pathfinderSALT) {
+                path = pathfinderSALT->findSteinerTree(sourceNodeId, validSinkNodeIds);
+            } else if (pathfinderArborescence) {
+                path = pathfinderArborescence->findSteinerTree(sourceNodeId, validSinkNodeIds);
+            } else {
+                std::cerr << "Error: No pathfinder initialized" << std::endl;
+                return nullptr;
+            }
             
             if (path.empty()) {
-                if (verboseLogging) {
-                    std::cerr << "Failed to find Steiner tree for net " << net.id << std::endl;
+                // More verbose error reporting
+                std::cerr << "Failed to find Steiner tree for net " << net.id << " (" << net.name << ")" 
+                        << " from source " << sourceNodeId 
+                        << " to " << validSinkNodeIds.size() << " sinks" << std::endl;
+                
+                // Add the first few sink IDs for debugging
+                if (!validSinkNodeIds.empty()) {
+                    std::cerr << "Sample sinks: ";
+                    for (size_t i = 0; i < std::min(size_t(5), validSinkNodeIds.size()); ++i) {
+                        std::cerr << validSinkNodeIds[i] << " ";
+                    }
+                    std::cerr << std::endl;
                 }
-                return nullptr;
+                
+                // Even though we failed to route, return the routing tree to track this failure
+                routingTree->isRouted = false;
+                return routingTree;
             }
             
             // Convert path to edges and add to routing tree
@@ -133,8 +204,18 @@ class Router {
                 routingTree->edges.push_back({path[i], path[i+1]});
             }
             
+            // Debug output about the path
+            if (verboseLogging) {
+                std::cout << "Successfully routed net " << net.id << " with path length " << path.size() 
+                        << " and " << routingTree->edges.size() << " edges" << std::endl;
+            }
+            
             // Update congestion for the entire path
-            pathfinder->updateCongestion(path);
+            if (useSALT && pathfinderSALT) {
+                pathfinderSALT->updateCongestion(path, 1.0);
+            } else if (pathfinderArborescence) {
+                pathfinderArborescence->updateCongestion(path);
+            }
             
             // Mark all sinks as routed (since Steiner tree connects them all)
             routingTree->isRouted = true;
@@ -148,9 +229,12 @@ class Router {
             const double baseCost = 1.0;
             
             // Add congestion awareness if pathfinder is initialized
-            if (pathfinder) {
-                double congestion = pathfinder->getCongestion(toId);
-                return baseCost + (congestion * 0.5); // Apply 50% weight to current congestion
+            if (useSALT && pathfinderSALT) {
+                double congestion = pathfinderSALT->getCongestion(toId);
+                return baseCost + (congestion * pathfinderCongestionFactor);
+            } else if (pathfinderArborescence) {
+                double congestion = pathfinderArborescence->getCongestion(toId);
+                return baseCost + (congestion * pathfinderCongestionFactor);
             }
             
             return baseCost;
@@ -173,17 +257,50 @@ class Router {
             // Initialize the pathfinder
             auto startTime = std::chrono::high_resolution_clock::now();
             
-            // Create Steiner tree pathfinder
-            pathfinder = std::make_unique<SteinerArborescence>(edges, nodes);
-            pathfinder->setTimeout(5000); // 5 second timeout for tree construction
-            pathfinder->setCongestionPenaltyFactor(1.5);
+            // Create pathfinder based on selected algorithm
+            if (useSALT) {
+                pathfinderSALT = std::make_unique<SteinerSALT>(edges, nodes);
+                
+                // Apply settings
+                if (pathfinderTimeout > 0) {
+                    pathfinderSALT->setTimeout(pathfinderTimeout);
+                } else {
+                    pathfinderSALT->setTimeout(5000); // Default 5 second timeout
+                }
+                
+                if (pathfinderCongestionFactor > 0) {
+                    pathfinderSALT->setCongestionPenaltyFactor(pathfinderCongestionFactor);
+                } else {
+                    pathfinderSALT->setCongestionPenaltyFactor(1.5); // Default congestion factor
+                }
+                
+                pathfinderSALT->setEpsilon(epsilon);
+                
+                // Reset congestion map
+                pathfinderSALT->resetCongestion();
+            } else {
+                pathfinderArborescence = std::make_unique<SteinerArborescence>(edges, nodes);
+                
+                // Apply settings
+                if (pathfinderTimeout > 0) {
+                    pathfinderArborescence->setTimeout(pathfinderTimeout);
+                } else {
+                    pathfinderArborescence->setTimeout(5000); // Default 5 second timeout
+                }
+                
+                if (pathfinderCongestionFactor > 0) {
+                    pathfinderArborescence->setCongestionPenaltyFactor(pathfinderCongestionFactor);
+                } else {
+                    pathfinderArborescence->setCongestionPenaltyFactor(1.5); // Default congestion factor
+                }
+                
+                // Reset congestion map
+                pathfinderArborescence->resetCongestion();
+            }
             
             auto endTime = std::chrono::high_resolution_clock::now();
             auto initTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
             std::cout << "Initialized pathfinder in " << initTime << "ms" << std::endl;
-            
-            // Reset congestion map at the start of routing
-            pathfinder->resetCongestion();
             
             // Start timing the full routing process
             startTime = std::chrono::high_resolution_clock::now();
@@ -225,26 +342,6 @@ class Router {
                 std::shared_ptr<RoutingTree> result = routeSingleNet(nets[i], edges, nodes);
                 if (result) {
                     routingResults.push_back(result);
-                    
-                    // If the route was successful, update congestion map
-                    if (result->isRouted && !result->edges.empty()) {
-                        // Extract the full path from edges
-                        std::vector<int> path;
-                        path.reserve(result->edges.size() + 1);
-                        
-                        // Add the first node of the first edge
-                        if (!result->edges.empty()) {
-                            path.push_back(result->edges[0].first);
-                        }
-                        
-                        // Add all destination nodes
-                        for (const auto& edge : result->edges) {
-                            path.push_back(edge.second);
-                        }
-                        
-                        // Update congestion along this path
-                        pathfinder->updateCongestion(path);
-                    }
                 }
             }
             

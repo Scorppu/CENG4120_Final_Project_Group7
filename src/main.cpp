@@ -13,7 +13,12 @@
 void printUsage(const char* programName) {
     std::cout << "Usage: " << programName << " <device_file> <netlist_file> <output_file> [options]" << std::endl;
     std::cout << "Options:" << std::endl;
-    std::cout << "  --verbose                        Enable verbose logging" << std::endl;
+    std::cout << "  --verbose                  Enable verbose logging" << std::endl;
+    std::cout << "  --timeout <ms>             Set timeout for pathfinding (default: 5000)" << std::endl;
+    std::cout << "  --congestion <val>         Set congestion penalty factor (default: 1.5)" << std::endl;
+    std::cout << "  --epsilon <val>            Set epsilon for SALT algorithm (default: 0.5)" << std::endl;
+    std::cout << "  --use-salt                 Use SALT algorithm instead of Arborescence (default)" << std::endl;
+    std::cout << "  --use-arborescence         Use Arborescence algorithm instead of SALT" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -28,12 +33,26 @@ int main(int argc, char* argv[]) {
 
     // Parse command-line options
     bool verboseLogging = false;             // Default logging level
+    int timeout = 5000;
+    double congestionFactor = 1.5;
+    double epsilon = 0.5;
+    bool useSALT = true;                     // Default to using SALT algorithm
     
     for (int i = 4; i < argc; i++) {
         std::string arg = argv[i];
         
         if (arg == "--verbose") {
             verboseLogging = true;
+        } else if (arg == "--timeout" && i + 1 < argc) {
+            timeout = std::stoi(argv[++i]);
+        } else if (arg == "--congestion" && i + 1 < argc) {
+            congestionFactor = std::stod(argv[++i]);
+        } else if (arg == "--epsilon" && i + 1 < argc) {
+            epsilon = std::stod(argv[++i]);
+        } else if (arg == "--use-salt") {
+            useSALT = true;
+        } else if (arg == "--use-arborescence") {
+            useSALT = false;
         } else {
             std::cerr << "Unknown option: " << arg << std::endl;
             printUsage(argv[0]);
@@ -79,22 +98,33 @@ int main(int argc, char* argv[]) {
               << (estimatedNodeMemory + estimatedEdgeMemory + estimatedNetMemory) / (1024 * 1024) 
               << "MB" << std::endl;
     
-    // Create router 
-    Router router;
-    router.setVerbose(verboseLogging);
-    
-    // Print routing configuration
-    std::cout << "\n==== Routing Configuration ====\n";
-    std::cout << "Strategy: Steiner Arborescence" << std::endl;
+    // Display routing configuration
+    std::cout << "\n==== Routing Configuration ====" << std::endl;
+    std::cout << "Strategy: " << (useSALT ? "SALT" : "Steiner Arborescence") << std::endl;
     std::cout << "Verbose logging: " << (verboseLogging ? "enabled" : "disabled") << std::endl;
-    std::cout << "==============================\n" << std::endl;
+    std::cout << "Timeout: " << timeout << "ms" << std::endl;
+    std::cout << "Congestion factor: " << congestionFactor << std::endl;
+    if (useSALT) {
+        std::cout << "Epsilon: " << epsilon << std::endl;
+    }
+    std::cout << "==============================" << std::endl;
     
-    // Perform routing
-    auto routingStart = std::chrono::high_resolution_clock::now();
+    // Create router and route all nets
+    Router router;
+    
+    // Set router configuration based on command line options
+    router.setVerbose(verboseLogging);
+    router.setTimeout(timeout);
+    router.setCongestionFactor(congestionFactor);
+    router.setEpsilon(epsilon);
+    router.setUseSALT(useSALT);
+    
+    auto startRouteTime = std::chrono::high_resolution_clock::now();
     router.routeAllNets(nets, edges, nodes);
-    auto routingEnd = std::chrono::high_resolution_clock::now();
-    std::cout << "Total routing time: " << std::chrono::duration_cast<std::chrono::seconds>(
-        routingEnd - routingStart).count() << "s" << std::endl;
+    
+    auto endRouteTime = std::chrono::high_resolution_clock::now();
+    auto routeTime = std::chrono::duration_cast<std::chrono::seconds>(endRouteTime - startRouteTime).count();
+    std::cout << "Total routing time: " << routeTime << "s" << std::endl;
         
     // Print routing results
     router.printRoutingResults();
