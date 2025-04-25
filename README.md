@@ -75,20 +75,20 @@ CENG4120_Final_Project_Group7 - FPGA Router
 To compile the router:
 
 ```bash
-cmake -S . -B out/build/
-cd out/build/
-ninja
+g++ src/AStarSearch.cpp src/main.cpp src/Reader.cpp src/router.cpp src/Writer.cpp -o router
+cd build
+make
 ```
 
 ## Usage
 
 ```bash
-./fpga_router <device> <netlist> <result>
+./FPGA_router <device> <netlist> <result>
 ```
 
 Example:
 ```bash
-./fpga_router xcvu3p.device design1.netlist design1.result
+./FPGA_router xcvu3p.device design1.netlist design1.result
 ```
 
 ## Benchmarks
