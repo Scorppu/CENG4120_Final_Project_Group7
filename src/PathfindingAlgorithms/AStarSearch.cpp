@@ -176,7 +176,7 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
     }
     
     // Start timing
-    auto startTime = std::chrono::high_resolution_clock::now();
+    auto startTime = std::chrono::steady_clock::now();
     
     // Priority queue for open set
     using SearchNode = std::pair<double, int>;  // <f_score, node_id>
@@ -201,14 +201,14 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
     int current;
     double hValue, nodeCongestion, totalCost, tentativeGScore;
 
-    std::chrono::high_resolution_clock::time_point currentTime;
+    std::chrono::steady_clock::time_point currentTime;
     std::chrono::milliseconds elapsedMs;
     
     // Main A* loop
     while (!openSet.empty() && iterations < MAX_ITERATIONS) {
         // Check for timeout - only every 100 iterations to reduce overhead
         if (iterations % 100 == 0) {
-            currentTime = std::chrono::high_resolution_clock::now();
+            currentTime = std::chrono::steady_clock::now();
             elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime);
             if (elapsedMs.count() > timeoutMs) {
                 break;

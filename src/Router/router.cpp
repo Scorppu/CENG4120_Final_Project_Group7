@@ -142,15 +142,16 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
     
     // Initialize the global pathfinder once
     if (!pathfinder) {
-        auto startTime = std::chrono::high_resolution_clock::now();
+        auto startTime = std::chrono::steady_clock::now();
         
-        pathfinder = std::make_unique<AStarSearch>(edges, nodes);
+        // Use new with manual pointer assignment instead of make_unique for C++11
+        pathfinder.reset(new AStarSearch(edges, nodes));
         pathfinder->setTimeout(2000); // 2 second timeout per path
         
         // Initialize congestion penalty factor
         pathfinder->setCongestionPenaltyFactor(5.0);
         
-        auto endTime = std::chrono::high_resolution_clock::now();
+        auto endTime = std::chrono::steady_clock::now();
         auto initTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
         std::cout << "Initialized pathfinder in " << initTime << "ms" << std::endl;
     }
@@ -159,7 +160,7 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
     pathfinder->resetCongestion();
     
     // Start timing the full routing process
-    auto startTime = std::chrono::high_resolution_clock::now();
+    auto startTime = std::chrono::steady_clock::now();
     
     // Pre-allocate vector for sink IDs to further reduce allocations
     validSinkNodeIds.reserve(100);  // Reasonable size for most nets
@@ -223,7 +224,7 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
     }
     
     // Report total time
-    auto endTime = std::chrono::high_resolution_clock::now();
+    auto endTime = std::chrono::steady_clock::now();
     auto totalTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime).count();
     std::cout << "Complete routing of all nets took " << totalTime << "ms" << std::endl;
 }
@@ -245,20 +246,4 @@ void Router::printRoutingResults() const {
     std::cout << "==========================\n" << std::endl;
 }
 
-// Implementation of SteinerTreeRouter
-
-SteinerTreeRouter::SteinerTreeRouter() : Router() {}
-
-void SteinerTreeRouter::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) {
-    // Implement Steiner Tree routing algorithm
-    // This is a placeholder implementation
-    std::cout << "Steiner Tree routing not implemented yet." << std::endl;
-}
-
-NetRoute SteinerTreeRouter::routeSingleNet(Net& net, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) {
-    // Implement Steiner Tree routing algorithm for a single net
-    // This is a placeholder implementation
-    std::cout << "Steiner Tree routing for a single net not implemented yet." << std::endl;
-    return NetRoute(net.id, net.name); // Return empty route
-}
 

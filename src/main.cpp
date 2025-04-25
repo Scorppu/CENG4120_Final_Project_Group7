@@ -19,7 +19,7 @@ int main(int argc, char* argv[]) {
     std::string netlistFile = argv[2];
     std::string outputFile = argv[3];
 
-    auto totalStart = std::chrono::high_resolution_clock::now();
+    auto totalStart = std::chrono::steady_clock::now();
     
     // Minimized logging to improve performance
     bool verboseLogging = false;
@@ -32,17 +32,17 @@ int main(int argc, char* argv[]) {
     // Parse input files
     Reader reader = Reader(deviceFile, netlistFile);
 
-    auto deviceParseStart = std::chrono::high_resolution_clock::now();
+    auto deviceParseStart = std::chrono::steady_clock::now();
     reader.parseDevice(nodes, edges);
-    auto deviceParseEnd = std::chrono::high_resolution_clock::now();
+    auto deviceParseEnd = std::chrono::steady_clock::now();
     std::cout << "Nodes: " << nodes.size() << ", Edges: " << edges.size() << std::endl;
     
     std::cout << "Device parsing: " << std::chrono::duration_cast<std::chrono::seconds>(
         deviceParseEnd - deviceParseStart).count() << "s" << std::endl;
 
-    auto netlistParseStart = std::chrono::high_resolution_clock::now();
+    auto netlistParseStart = std::chrono::steady_clock::now();
     reader.parseNetlist(nets);
-    auto netlistParseEnd = std::chrono::high_resolution_clock::now();
+    auto netlistParseEnd = std::chrono::steady_clock::now();
     
     std::cout << "Netlist parsing: " << std::chrono::duration_cast<std::chrono::seconds>(
         netlistParseEnd - netlistParseStart).count() << "s" << std::endl;
@@ -62,22 +62,25 @@ int main(int argc, char* argv[]) {
     
     // Create router 
     Router router;
-    router.setVerbose(verboseLogging);
-    
+    // SteinerTreeRouter stRouter;
+
     // Perform routing
-    auto routingStart = std::chrono::high_resolution_clock::now();
+    auto routingStart = std::chrono::steady_clock::now();
     router.routeAllNets(nets, edges, nodes);
-    auto routingEnd = std::chrono::high_resolution_clock::now();
+    // stRouter.routeAllNets(nets, edges, nodes);
+    auto routingEnd = std::chrono::steady_clock::now();
     
     std::cout << "Total routing time: " << std::chrono::duration_cast<std::chrono::seconds>(
         routingEnd - routingStart).count() << "s" << std::endl;
         
     // Print routing results
     router.printRoutingResults();
+    // stRouter.printRoutingResults();
     
     // Write output to file
     Writer writer(outputFile);
     writer.setRoutingResults(&router.getRoutingResults());
+    // writer.setRoutingResults(&stRouter.getRoutingResults());
     writer.setOriginalNets(&nets);
     writer.writeOutput();
     
@@ -86,8 +89,9 @@ int main(int argc, char* argv[]) {
         std::cout << "Cleaning up resources..." << std::endl;
     }
     router.clearAll();
+    // stRouter.clearAll();
     
-    auto totalEnd = std::chrono::high_resolution_clock::now();
+    auto totalEnd = std::chrono::steady_clock::now();
     std::cout << "Total program time: " << std::chrono::duration_cast<std::chrono::seconds>(
         totalEnd - totalStart).count() << "s" << std::endl;
 

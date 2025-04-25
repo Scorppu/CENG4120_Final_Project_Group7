@@ -64,15 +64,32 @@ public:
 
 // Derived class for Steiner Tree routing
 class SteinerTreeRouter : public Router {
+private:
+    // Collection of routing results using the simpler NetRoute structure
+    std::vector<NetRoute> routingResults;
+    
+    // Shared pathfinding instance to avoid costly recreation
+    std::unique_ptr<AStarSearch> pathfinder;
+    
+    // Reusable data structures to avoid repeated allocation
+    std::unordered_set<int> existingNodeIds;
+    std::vector<int> validSinkNodeIds;
 public:
     // Constructor
     SteinerTreeRouter();
+    
+    std::vector<int> get_shortest_path(int src, int dest, const std::vector<std::vector<int>>& edges);
 
-    // Route all nets using Steiner Tree algorithm
-    void routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) override;
+    std::vector<std::vector<std::vector<int>>> compute_all_shortest_paths(
+        const std::unordered_set<int>& terminals, 
+        const std::vector<std::vector<int>>& edges
+    );
 
-    // Route a single net using Steiner Tree algorithm
+    // Override routeSingleNet to use Steiner Tree algorithm
     NetRoute routeSingleNet(Net& net, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) override;
+    
+    // Override routeAllNets to use Steiner Tree algorithm
+    void routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) override;
 };
 
 #endif // ROUTER_HPP
