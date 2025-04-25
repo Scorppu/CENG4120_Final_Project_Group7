@@ -8,7 +8,7 @@
 #include <algorithm>
 #include <limits>
 #include <cstring>  // For strncmp
-#include "../Datastructure.hpp"
+#include "Datastructure.hpp"
 #include "Reader.hpp"
 
 // Constructor

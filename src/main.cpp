@@ -7,9 +7,9 @@
 #include <regex>
 #include <string>
 #include "DataStructure.hpp"
-#include "Reader/Reader.hpp"
-#include "Router/Router.hpp"
-#include "Writer/Writer.hpp"
+#include "Reader.hpp"
+#include "Router.hpp"
+#include "Writer.hpp"
 
 // Helper function to extract design number from filename
 int extractDesignNumber(const std::string& filename) {

@@ -5,8 +5,8 @@
 #include <memory>
 #include <unordered_set>
 #include <chrono>
-#include "../Datastructure.hpp"
-#include "../PathfindingAlgorithms/AStarSearch.hpp"
+#include "Datastructure.hpp"
+#include "AStarSearch.hpp"
 
 class Router {
 private:
