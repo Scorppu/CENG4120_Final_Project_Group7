@@ -74,7 +74,7 @@ CENG4120_Final_Project_Group7 - FPGA Router
 │   │   └── Router.hpp                    # Router header file
 │   │
 │   └── Writers/                          # Writers
-│   │   ├── Writer.cpp                    # Main Writer
+│       ├── Writer.cpp                    # Main Writer
 │       └── Writer.hpp                    # Writer header file
 │
 ├── .gitignore
