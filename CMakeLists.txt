@@ -1,4 +1,8 @@
-cmake_minimum_required(VERSION 2.8)
+if (APPLE OR WIN32)
+    cmake_minimum_required(VERSION 3.10)
+else()
+    cmake_minimum_required(VERSION 2.8)
+endif()
 
 project(FPGA_Router)
 include(CheckCXXCompilerFlag)  # Case-sensitive in CMake 2.8
