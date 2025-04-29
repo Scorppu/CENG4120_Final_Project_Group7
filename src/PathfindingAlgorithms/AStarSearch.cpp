@@ -265,6 +265,110 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
     return;
 }
 
+// Modified pathfinding method that also tracks congested nodes
+void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>& path, 
+                         std::unordered_map<int, std::unordered_set<int>>& congestedNodes, int netId) {
+    // Special case for when source and target are the same
+    if (sourceNodeId == targetNodeId) {
+        return;
+    }
+    
+    // Start timing
+    auto startTime = std::chrono::steady_clock::now();
+    
+    // Priority queue for open set
+    using SearchNode = std::pair<double, int>;  // <f_score, node_id>
+    std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>> openSet;
+    
+    // Maps to store metadata - consider dense arrays if node IDs are dense and consecutive
+    gScore.clear(); // Cost from start to node
+    fScore.clear(); // Estimated total cost
+    cameFrom.clear();  // Parent pointers
+    closedSet.clear();      // Nodes already evaluated
+    
+    // Initialize with start node
+    openSet.push({0, sourceNodeId});  // <f_score, node_id>
+    gScore[sourceNodeId] = 0;
+    fScore[sourceNodeId] = heuristicFunc(sourceNodeId, targetNodeId);
+    
+    // Safety counter to prevent infinite loops
+    const int MAX_ITERATIONS = 50000;
+    int iterations = 0;
+    
+    // Initialize variables
+    int current;
+    double hValue, nodeCongestion, totalCost, tentativeGScore;
+
+    std::chrono::steady_clock::time_point currentTime;
+    std::chrono::milliseconds elapsedMs;
+    
+    // Main A* loop
+    while (!openSet.empty() && iterations < MAX_ITERATIONS) {
+        // Check for timeout - only every 100 iterations to reduce overhead
+        if (iterations % 100 == 0) {
+            currentTime = std::chrono::steady_clock::now();
+            elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime);
+            if (elapsedMs.count() > timeoutMs) {
+                break;
+            }
+        }
+        
+        // Get node with lowest fScore
+        current = openSet.top().second;
+        openSet.pop();
+        iterations++;
+        
+        // If we've reached the target, reconstruct the path
+        if (current == targetNodeId) {
+            reconstructPath(cameFrom, current, path);
+            
+            // Track congested nodes for the entire path
+            for (int nodeId : path) {
+                congestedNodes[nodeId].insert(netId);
+            }
+            
+            return;
+        }
+        
+        // Skip if already evaluated
+        if (closedSet.count(current)) {
+            continue;
+        }
+        
+        // Mark as evaluated
+        closedSet.insert(current);
+        
+        // Process all neighbors - OPTIMIZED to avoid edge tracking overhead
+        for (int neighbor : getNeighbors(current)) {
+            // Skip if already evaluated
+            if (closedSet.count(neighbor)) {
+                continue;
+            }
+            
+            // Calculate tentative gScore using the congestion-aware cost function
+            tentativeGScore = gScore[current] + congestionAwareCost(current, neighbor);
+            
+            // If this path is better than any previous one
+            if (gScore.find(neighbor) == gScore.end() || tentativeGScore < gScore[neighbor]) {
+                // Update metadata
+                cameFrom[neighbor] = current;
+                gScore[neighbor] = tentativeGScore;
+                // Use heuristic plus congestion penalty for more informed search
+                hValue = heuristicFunc(neighbor, targetNodeId);
+                nodeCongestion = getCongestion(neighbor);
+                totalCost = gScore[neighbor] + hValue + (nodeCongestion * congestionPenaltyFactor);
+                fScore[neighbor] = totalCost;
+                
+                // Add to open set
+                openSet.push({fScore[neighbor], neighbor});
+            }
+        }
+    }
+    
+    // If we get here, no path was found
+    return;
+}
+
 // Find paths from a source to multiple targets
 // std::vector<std::vector<int>> AStarSearch::findPaths(int sourceNodeId, const std::vector<int>& targetNodeIds) {
 //     std::vector<std::vector<int>> paths;

@@ -55,38 +55,255 @@ void Router::setProgramStartTime(std::chrono::time_point<std::chrono::steady_clo
     hasProgramStartTime = true;
 }
 
-// Resolve congestions (Rip up and reroute)
-void Router::resolveCongestion() {
-    // Implement congestion resolution logic here
+// Extract nodes from a route's edges
+std::vector<int> Router::extractNodesFromRoute(const NetRoute& route) const {
+    std::vector<int> nodes;
+    if (route.edges.empty()) {
+        return nodes;
+    }
+    
+    // Start with the first node of the first edge
+    nodes.push_back(route.edges[0].first);
+    
+    // Add all destination nodes
+    for (const auto& edge : route.edges) {
+        nodes.push_back(edge.second);
+    }
+    
+    return nodes;
 }
 
-// Route a single net using A* Search
-NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) {
-    // Create a NetRoute object to store the results
-    NetRoute netRoute(net.id, net.name);
-
-    // In the netlist format from design1.netlist:
-    // First node is the source, all others are sinks
-    int sourceNodeId = net.nodeIDs[0];
-    std::vector<int> sinkNodeIds(net.nodeIDs.begin() + 1, net.nodeIDs.end());
+// Calculate congestion score for a net
+double Router::calculateCongestionScore(int netId, const std::vector<int>& path) const {
+    double score = 0.0;
     
-    // Verify source node exists in the graph
-    if (existingNodeIds.find(sourceNodeId) == existingNodeIds.end()) {
-        return netRoute; // Return empty NetRoute with isRouted = false
+    for (int nodeId : path) {
+        auto it = congestedNodes.find(nodeId);
+        if (it != congestedNodes.end()) {
+            int users = it->second.size();
+            if (users > 1) {  // Only consider congested nodes (more than one user)
+                score += 1.0 / (users - 1);
+            }
+        }
     }
     
-    // Filter sinks to only include those that exist in the graph
-    validSinkNodeIds.clear();
-    validSinkNodeIds.reserve(sinkNodeIds.size());  // Pre-allocate for efficiency
+    return score;
+}
+
+// Resolve congestions (Rip up and reroute)
+void Router::resolveCongestion() {
+    // Skip if no routing results
+    if (routingResults.empty()) {
+        return;
+    }
     
-    for (int sinkId : sinkNodeIds) {
+    std::cout << "\n==== Starting Congestion Resolution ====\n";
+    
+    // Maximum number of iterations for rip-up and reroute
+    const int MAX_ITERATIONS = 5;
+    
+    // Timeout check parameters
+    auto startTime = std::chrono::steady_clock::now();
+    bool timeoutOccurred = false;
+    
+    // Continue resolving congestion for multiple iterations or until no congestion
+    for (int iteration = 0; iteration < MAX_ITERATIONS; ++iteration) {
+        // Check for timeout
+        if (hasProgramStartTime) {
+            auto currentTime = std::chrono::steady_clock::now();
+            auto elapsedSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+                currentTime - programStartTime).count();
+                
+            // Leave buffer time for cleanup
+            if (elapsedSeconds >= (timeoutSeconds - 2)) {
+                std::cout << "Congestion resolution timeout reached (total program time: " 
+                        << elapsedSeconds << " seconds). Stopping." << std::endl;
+                timeoutOccurred = true;
+                break;
+            }
+        }
+        
+        // Count congested nodes
+        int congestedNodeCount = 0;
+        for (const auto& pair : congestedNodes) {
+            if (pair.second.size() > 1) {
+                congestedNodeCount++;
+            }
+        }
+        
+        std::cout << "Iteration " << (iteration + 1) << ": " 
+                  << congestedNodeCount << " congested nodes found." << std::endl;
+        
+        // If no congestion, we're done
+        if (congestedNodeCount == 0) {
+            std::cout << "No congestion found. Congestion resolution complete.\n";
+            break;
+        }
+        
+        // Step 1: Calculate congestion scores for all nets
+        std::vector<std::pair<int, double>> netScores;
+        netScores.reserve(routingResults.size());
+        
+        for (size_t i = 0; i < routingResults.size(); ++i) {
+            const NetRoute& route = routingResults[i];
+            int netId = route.netId;
+            
+            if (!route.isRouted || route.edges.empty()) {
+                continue; // Skip unrouted nets
+            }
+            
+            // Extract nodes from the route
+            std::vector<int> nodes = extractNodesFromRoute(route);
+            
+            // Calculate initial congestion score
+            double score = calculateCongestionScore(netId, nodes);
+            
+            // Step 2: Apply net-size multiplier based on fanout
+            // Find the corresponding Net to get fanout
+            for (size_t j = 0; j < routingResults.size(); ++j) {
+                if (routingResults[j].netId == netId) {
+                    // Estimate fanout from number of edges in the route
+                    int fanout = std::max(1, (int)nodes.size() - 1);
+                    score *= std::log(fanout + 1); // +1 to avoid log(0)
+                    break;
+                }
+            }
+            
+            // Step 3: Deduct priority for nets rerouted >3 times
+            int attempts = rerouteAttempts[netId];
+            if (attempts > 3) {
+                // Apply penalty: score *= 0.8^attempts
+                double penalty = 1.0;
+                for (int a = 0; a < (attempts - 3); ++a) {
+                    penalty *= 0.8;
+                }
+                score *= penalty;
+            }
+            
+            // Add to scores list
+            netScores.push_back({netId, score});
+        }
+        
+        // Step 4: Sort nets by score (descending)
+        std::sort(netScores.begin(), netScores.end(),
+            [](const std::pair<int, double>& a, const std::pair<int, double>& b) {
+                return a.second > b.second;
+            }
+        );
+        
+        // Step 5: Select top 20% of nets to rip up
+        size_t netsToRipUp = std::max(size_t(1), netScores.size() / 5);
+        std::vector<int> ripUpNets;
+        ripUpNets.reserve(netsToRipUp);
+        
+        for (size_t i = 0; i < netsToRipUp && i < netScores.size(); ++i) {
+            ripUpNets.push_back(netScores[i].first);
+        }
+        
+        std::cout << "Ripping up " << ripUpNets.size() << " nets with highest congestion scores." << std::endl;
+        
+        // Clear congestion data for these nets
+        for (int netId : ripUpNets) {
+            // Increment reroute attempts
+            rerouteAttempts[netId]++;
+            
+            // Find the corresponding route
+            for (size_t i = 0; i < routingResults.size(); ++i) {
+                if (routingResults[i].netId == netId) {
+                    // Remove this net from congestedNodes tracking
+                    std::vector<int> nodes = extractNodesFromRoute(routingResults[i]);
+                    for (int nodeId : nodes) {
+                        auto it = congestedNodes.find(nodeId);
+                        if (it != congestedNodes.end()) {
+                            it->second.erase(netId);
+                            if (it->second.empty()) {
+                                congestedNodes.erase(it);
+                            }
+                        }
+                    }
+                    
+                    // Get net info to reroute
+                    int sourceNodeId = 0;
+                    std::vector<int> sinkNodeIds;
+                    
+                    if (!routingResults[i].edges.empty()) {
+                        // Source is the first node of the first edge
+                        sourceNodeId = routingResults[i].edges[0].first;
+                        
+                        // Collect unique destination nodes
+                        std::unordered_set<int> uniqueSinks;
+                        for (const auto& edge : routingResults[i].edges) {
+                            uniqueSinks.insert(edge.second);
+                        }
+                        sinkNodeIds.assign(uniqueSinks.begin(), uniqueSinks.end());
+                    }
+                    
+                    // Only proceed if we have valid source and sinks
+                    if (sourceNodeId != 0 && !sinkNodeIds.empty()) {
+                        // Clear the previous route
+                        routingResults[i].edges.clear();
+                        
+                        // Route from source to each sink
+                        for (int sinkId : sinkNodeIds) {
+                            // Find path from source to this sink
+                            std::vector<int> path;
+                            pathfinder->findPath(sourceNodeId, sinkId, path, congestedNodes, netId);
+                            
+                            if (path.empty() || path.size() < 2) {
+                                continue; // Failed to find a path
+                            }
+                            
+                            // Convert path to edges and add to NetRoute
+                            std::vector<std::pair<int, int>> newEdges;
+                            newEdges.reserve(path.size() - 1);
+                            for (size_t j = 0; j < path.size() - 1; ++j) {
+                                newEdges.push_back({path[j], path[j+1]});
+                            }
+                            routingResults[i].addEdges(newEdges);
+                        }
+                        
+                        // Update congestion map
+                        std::vector<int> newNodes = extractNodesFromRoute(routingResults[i]);
+                        if (!newNodes.empty()) {
+                            pathfinder->updateCongestion(newNodes, 2.0);
+                        }
+                    }
+                    
+                    // Done processing this net
+                    break;
+                }
+            }
+        }
+    }
+    
+    std::cout << "==== Congestion Resolution Complete ====\n\n";
+}
+
+// Route a single net
+NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) {
+    NetRoute netRoute;
+    netRoute.netId = net.id;
+    
+    // Validate that all node IDs exist in the graph
+    for (size_t j = 0; j < net.nodeIDs.size(); ++j) {
+        if (existingNodeIds.find(net.nodeIDs[j]) == existingNodeIds.end()) {
+            std::cerr << "Warning: Node ID " << net.nodeIDs[j] << " in net " << net.id 
+                    << " does not exist in the graph. Skipping this node." << std::endl;
+        }
+    }
+    
+    // Clear the valid sink node IDs vector (reused across calls)
+    validSinkNodeIds.clear();
+    
+    // First node is the source (driver), rest are sinks
+    int sourceNodeId = net.nodeIDs[0];
+    
+    // Collect only valid sink node IDs
+    for (size_t j = 1; j < net.nodeIDs.size(); ++j) {
+        int sinkId = net.nodeIDs[j];
         if (existingNodeIds.find(sinkId) != existingNodeIds.end()) {
             validSinkNodeIds.push_back(sinkId);
-        } 
-    }
-    
-    if (validSinkNodeIds.empty()) {
-        return netRoute; // Return empty NetRoute with isRouted = false
+        }
     }
     
     // Route from source to each sink
@@ -97,7 +314,7 @@ NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& e
     for (int sinkId : validSinkNodeIds) {
         // Find path from source to this sink
         std::vector<int> path;
-        pathfinder->findPath(sourceNodeId, sinkId, path);
+        pathfinder->findPath(sourceNodeId, sinkId, path, congestedNodes, net.id);
         
         if (path.empty() || path.size() < 2) {
             // Failed to find a path to this sink
@@ -241,6 +458,8 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
     size_t progressStep = std::max(size_t(1), nets.size() / 10);
     bool timeoutOccurred = false;
     
+
+
     // Route nets in order of descending fanout
     for (size_t idx = 0; idx < netIndices.size(); ++idx) {
         // Check for global timeout using total program time if available
@@ -325,6 +544,14 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
     auto routingTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - routingStartTime).count();
     std::cout << "Routing " << (timeoutOccurred ? "(stopped by timeout)" : "of all nets") 
               << " took " << routingTime << "ms" << std::endl;
+
+
+    // Resolve congestion
+    // auto resolveStartTime = std::chrono::steady_clock::now();
+    // resolveCongestion();
+    // auto resolveEndTime = std::chrono::steady_clock::now();
+    // auto resolveTime = std::chrono::duration_cast<std::chrono::milliseconds>(resolveEndTime - resolveStartTime).count();
+    // std::cout << "Resolving congestion took " << resolveTime << "ms" << std::endl;
 }
 
 // Print routing results

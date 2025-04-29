@@ -72,41 +72,41 @@ if(WIN32 OR APPLE)
       COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design1.netlist" "../data/results/design1.result"
       DEPENDS FPGA_Router
       USES_TERMINAL
-      COMMENT "Running FPGA_Router with design 1\n"
+      COMMENT "Running FPGA_Router with design 1"
   )
 
   add_custom_target(design2
       COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design2.netlist" "../data/results/design2.result"
       DEPENDS FPGA_Router
       USES_TERMINAL
-      COMMENT "Running FPGA_Router with design 2\n"
+      COMMENT "Running FPGA_Router with design 2"
   )
 
   add_custom_target(design3
       COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design3.netlist" "../data/results/design3.result"
       DEPENDS FPGA_Router
       USES_TERMINAL
-      COMMENT "Running FPGA_Router with design 3\n"
+      COMMENT "Running FPGA_Router with design 3"
   )
 
   add_custom_target(design4
       COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design4.netlist" "../data/results/design4.result"
       DEPENDS FPGA_Router
       USES_TERMINAL
-      COMMENT "Running FPGA_Router with design 4\n"
+      COMMENT "Running FPGA_Router with design 4"
   )
 
   add_custom_target(design5
       COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design5.netlist" "../data/results/design5.result"
       DEPENDS FPGA_Router
       USES_TERMINAL
-      COMMENT "Running FPGA_Router with design 5\n"
+      COMMENT "Running FPGA_Router with design 5"
   )
 elseif(UNIX)
   add_custom_target(design1
       COMMAND $<TARGET_FILE:FPGA_Router> "../../../../../../../research/d1/gds/whlin23/public/xcvu3p.device" "../data/benchmarks/design1.netlist" "../data/results/design1.result"
       DEPENDS FPGA_Router
-      COMMENT "Running FPGA_Router with design 1\n"
+      COMMENT "Running FPGA_Router with design 1"
   )
 
   add_custom_target(design2

@@ -20,6 +20,10 @@ public:
     // Returns a vector of node IDs representing the path from source to target
     void findPath(int sourceNodeId, int targetNodeId, std::vector<int>& path);
     
+    // Modified pathfinding method that also tracks congested nodes
+    void findPath(int sourceNodeId, int targetNodeId, std::vector<int>& path, 
+                 std::unordered_map<int, std::unordered_set<int>>& congestedNodes, int netId);
+    
     // Find paths from a source to multiple targets
     // Returns a vector of paths, one for each target
     std::vector<std::vector<int>> findPaths(int sourceNodeId, const std::vector<int>& targetNodeIds);

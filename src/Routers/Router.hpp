@@ -20,6 +20,12 @@ private:
     std::unordered_set<int> existingNodeIds;
     std::vector<int> validSinkNodeIds;
     
+    // Keep track of congested nodes
+    std::unordered_map<int, std::unordered_set<int>> congestedNodes;
+    
+    // Keep track of reroute attempts for each net
+    std::unordered_map<int, int> rerouteAttempts;
+
     // Design-specific settings
     int designNumber;     // Current design number (1-5)
     int timeoutSeconds;   // Global timeout in seconds
@@ -78,6 +84,12 @@ public:
     
     // Print routing results
     void printRoutingResults() const;
+    
+    // Extract nodes from a route's edges
+    std::vector<int> extractNodesFromRoute(const NetRoute& route) const;
+    
+    // Calculate congestion score for a net
+    double calculateCongestionScore(int netId, const std::vector<int>& path) const;
 };
 
 // Derived class for Steiner Tree routing
