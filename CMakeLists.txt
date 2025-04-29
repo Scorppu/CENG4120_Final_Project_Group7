@@ -63,37 +63,69 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
 
 
 # if on local machine
-add_custom_target(design1
-    COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design1.netlist" "../data/results/design1.result"
-    DEPENDS FPGA_Router
-    USES_TERMINAL
-    COMMENT "Running FPGA_Router with design 1\n"
-)
+if(WIN32 OR APPLE)
+  add_custom_target(design1
+      COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design1.netlist" "../data/results/design1.result"
+      DEPENDS FPGA_Router
+      USES_TERMINAL
+      COMMENT "Running FPGA_Router with design 1\n"
+  )
 
-add_custom_target(design2
-    COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design2.netlist" "../data/results/design2.result"
-    DEPENDS FPGA_Router
-    USES_TERMINAL
-    COMMENT "Running FPGA_Router with design 2\n"
-)
+  add_custom_target(design2
+      COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design2.netlist" "../data/results/design2.result"
+      DEPENDS FPGA_Router
+      USES_TERMINAL
+      COMMENT "Running FPGA_Router with design 2\n"
+  )
 
-add_custom_target(design3
-    COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design3.netlist" "../data/results/design3.result"
-    DEPENDS FPGA_Router
-    USES_TERMINAL
-    COMMENT "Running FPGA_Router with design 3\n"
-)
+  add_custom_target(design3
+      COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design3.netlist" "../data/results/design3.result"
+      DEPENDS FPGA_Router
+      USES_TERMINAL
+      COMMENT "Running FPGA_Router with design 3\n"
+  )
 
-add_custom_target(design4
-    COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design4.netlist" "../data/results/design4.result"
-    DEPENDS FPGA_Router
-    USES_TERMINAL
-    COMMENT "Running FPGA_Router with design 4\n"
-)
+  add_custom_target(design4
+      COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design4.netlist" "../data/results/design4.result"
+      DEPENDS FPGA_Router
+      USES_TERMINAL
+      COMMENT "Running FPGA_Router with design 4\n"
+  )
 
-add_custom_target(design5
-    COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design5.netlist" "../data/results/design5.result"
-    DEPENDS FPGA_Router
-    USES_TERMINAL
-    COMMENT "Running FPGA_Router with design 5\n"
-)
+  add_custom_target(design5
+      COMMAND $<TARGET_FILE:FPGA_Router> "../data/xcvu3p/xcvu3p.device" "../data/benchmarks/design5.netlist" "../data/results/design5.result"
+      DEPENDS FPGA_Router
+      USES_TERMINAL
+      COMMENT "Running FPGA_Router with design 5\n"
+  )
+elseif(UNIX)
+  add_custom_target(design1
+      COMMAND $<TARGET_FILE:FPGA_Router> "../../../../../../../research/d1/gds/whlin23/public/xcvu3p.device" "../data/benchmarks/design1.netlist" "../data/results/design1.result"
+      DEPENDS FPGA_Router
+      COMMENT "Running FPGA_Router with design 1\n"
+  )
+
+  add_custom_target(design2
+      COMMAND $<TARGET_FILE:FPGA_Router> "../../../../../../../research/d1/gds/whlin23/public/xcvu3p.device" "../data/benchmarks/design2.netlist" "../data/results/design2.result"
+      DEPENDS FPGA_Router
+      COMMENT "Running FPGA_Router with design 2\n"
+  )
+
+  add_custom_target(design3
+      COMMAND $<TARGET_FILE:FPGA_Router> "../../../../../../../research/d1/gds/whlin23/public/xcvu3p.device" "../data/benchmarks/design3.netlist" "../data/results/design3.result"
+      DEPENDS FPGA_Router
+      COMMENT "Running FPGA_Router with design 3\n"
+  )
+
+  add_custom_target(design4
+      COMMAND $<TARGET_FILE:FPGA_Router> "../../../../../../../research/d1/gds/whlin23/public/xcvu3p.device" "../data/benchmarks/design4.netlist" "../data/results/design4.result"
+      DEPENDS FPGA_Router
+      COMMENT "Running FPGA_Router with design 4\n"
+  )
+
+  add_custom_target(design5
+      COMMAND $<TARGET_FILE:FPGA_Router> "../../../../../../../research/d1/gds/whlin23/public/xcvu3p.device" "../data/benchmarks/design5.netlist" "../data/results/design5.result"
+      DEPENDS FPGA_Router
+      COMMENT "Running FPGA_Router with design 5\n"
+  )
+endif()
