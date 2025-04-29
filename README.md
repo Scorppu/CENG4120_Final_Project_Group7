@@ -36,24 +36,10 @@ The implementation uses a negotiation-based PathFinder algorithm:
 ```
 CENG4120_Final_Project_Group7 - FPGA Router
 │
-├── src/                                  # Source code
-│   ├── main.cpp                          # Program entry point
-│   │
-│   ├── Interface/                        # Header files
-│   │   ├── Reader.hpp                    # Input handling interface
-│   │   ├── Router.hpp                    # PathFinder algorithm interface
-│   │   └── Writer.hpp                    # Output generation interface
-│   │
-│   ├── Reader/                           # Input implementation
-│   │   └── STReader.cpp                  # Parses device files and netlists
-│   │
-│   ├── Router/                           # Routing implementation
-│   │   └── router.cpp                    # PathFinder algorithm with A* search
-│   │
-│   └── Writer/                           # Output implementation
-│       └── output.cpp                    # Generates routing results
-│
 ├── data/                                 # Test data
+│   ├── xcvu3p/                           # Input device (not included in remote repository)
+│   │   └── xcvu3p.device                 # get: https://github.com/ippan-kaishain/CENG4120-2025-Final/releases/download/Released/xcvu3p.tar.bz2
+│   │                                     
 │   ├── benchmarks/                       # Input netlists
 │   │   ├── design1.netlist               # Simple test case
 │   │   ├── design2.netlist               # Small test case
@@ -61,11 +47,38 @@ CENG4120_Final_Project_Group7 - FPGA Router
 │   │   ├── design4.netlist               # Medium test case
 │   │   └── design5.netlist               # Large real-world case
 │   │
-│   └── results/                          # Output directory for results
+│   └── results/                          # Output directory for results (not included in remote repository)
+│       ├── design1.result                
+│       ├── design2.result
+│       ├── design3.result
+│       ├── design4.result
+│       └── design5.result
 │
 ├── docs/                                 # Documentation
 │   └── CENG4120-Final-FPGA Routing.docx  # Assignment specification
 │
+├── src/                                  # Source code
+│   ├── main.cpp                          # Program entry point
+│   ├── DataStructure.hpp                 # Shared data structures
+│   │
+│   ├── PathfindingAlgorithms/            # Pathfinders
+│   │   ├── AStarSearch.cpp               # A* Search implementation
+│   │   └── AStarSearch.hpp               # A* Search header
+│   │
+│   ├── Readers/                          # Input parsers
+│   │   ├── Reader.cpp                    # Parses device file and netlist
+│   │   └── Reader.hpp                    # Reader header file
+│   │
+│   ├── Routers/                          # Routers
+│   │   ├── Router.cpp                    # Main Router
+│   │   └── Router.hpp                    # Router header file
+│   │
+│   └── Writers/                          # Writers
+│   │   ├── Writer.cpp                    # Main Writer
+│       └── Writer.hpp                    # Writer header file
+│
+├── .gitignore
+├── CMakeLists.txt                        # CMake file
 ├── README.md                             # This file
 └── PROJECT_STRUCTURE.txt                 # Contains Project file structure
 ```
@@ -74,13 +87,31 @@ CENG4120_Final_Project_Group7 - FPGA Router
 
 To compile the router:
 
+# For CSE slurm
 ```bash
-g++ src/AStarSearch.cpp src/main.cpp src/Reader.cpp src/router.cpp src/Writer.cpp -o router
 cd build
+cmake ..
+cmake .
+make
+```
+
+# For Windows (CMAKE 3.5+)
+```bash
+cd build
+cmake -S .. -B .
+ninja
+```
+
+# For MacOS (CMAKE 3.5+)
+```bash
+cd build
+cmake -S .. -B .
 make
 ```
 
 ## Usage
+
+# For CSE slurm (actual submission)
 
 ```bash
 ./FPGA_router <device> <netlist> <result>
@@ -89,6 +120,20 @@ make
 Example:
 ```bash
 ./FPGA_router xcvu3p.device design1.netlist design1.result
+```
+
+# For testing (Windows)
+
+```bash
+# result is automatically written to design<number>.result
+ninja design1 # or design2/3/4/5
+```
+
+# For testing (MacOS)
+
+```bash
+# result is automatically written to design<number>.result
+make design1 # or design2/3/4/5
 ```
 
 ## Benchmarks
