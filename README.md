@@ -87,7 +87,7 @@ CENG4120_Final_Project_Group7 - FPGA Router
 
 To compile the router:
 
-# For CSE slurm
+### For CSE slurm
 ```bash
 cd build
 cmake ..
@@ -95,14 +95,14 @@ cmake .
 make
 ```
 
-# For Windows (CMAKE 3.5+)
+### For Windows (CMAKE 3.5+)
 ```bash
 cd build
 cmake -S .. -B .
 ninja
 ```
 
-# For MacOS (CMAKE 3.5+)
+### For MacOS (CMAKE 3.5+)
 ```bash
 cd build
 cmake -S .. -B .
@@ -111,7 +111,7 @@ make
 
 ## Usage
 
-# For CSE slurm (actual submission)
+### For CSE slurm (actual submission)
 
 ```bash
 ./FPGA_router <device> <netlist> <result>
@@ -122,14 +122,14 @@ Example:
 ./FPGA_router xcvu3p.device design1.netlist design1.result
 ```
 
-# For testing (Windows)
+### For testing (Windows)
 
 ```bash
 # result is automatically written to design<number>.result
 ninja design1 # or design2/3/4/5
 ```
 
-# For testing (MacOS)
+### For testing (MacOS)
 
 ```bash
 # result is automatically written to design<number>.result
