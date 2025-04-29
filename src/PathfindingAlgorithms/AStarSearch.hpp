@@ -8,7 +8,7 @@
 #include <limits>
 #include <functional>
 #include <memory>
-#include "Datastructure.hpp"
+#include "../DataStructure.hpp"
 
 class AStarSearch {
 public:

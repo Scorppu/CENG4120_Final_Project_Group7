@@ -10,10 +10,10 @@ include_directories(
 # Source files - verify these paths are correct
 set(SOURCE_FILES 
     src/main.cpp 
-    src/Reader.cpp 
-    src/router.cpp 
-    src/Writer.cpp 
-    src/AStarSearch.cpp
+    src/Readers/Reader.cpp 
+    src/Routers/Router.cpp 
+    src/Writers/Writer.cpp 
+    src/PathfindingAlgorithms/AStarSearch.cpp
 )
 
 set(CMAKE_CXX_STANDARD 11)

@@ -3,7 +3,6 @@
 #include <vector>
 #include <string>
 #include <unordered_map>
-#include "Datastructure.hpp"
 #include "Writer.hpp"
 
 // Constructor
