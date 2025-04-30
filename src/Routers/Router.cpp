@@ -110,7 +110,7 @@ void Router::resolveCongestion(const std::vector<Net>& nets, const std::vector<s
     }
     
     // Maximum number of iterations for rip-up and reroute
-    const int MAX_ITERATIONS = 5;
+    const int MAX_ITERATIONS = 50;
     
     // Timeout check parameters
     auto startTime = std::chrono::steady_clock::now();
@@ -141,8 +141,8 @@ void Router::resolveCongestion(const std::vector<Net>& nets, const std::vector<s
             }
         }
         
-        std::cout << "Iteration " << (iteration + 1) << ": " 
-                  << congestedNodeCount << " congested nodes found." << std::endl;
+        // std::cout << "Iteration " << (iteration + 1) << ": " 
+        //           << congestedNodeCount << " congested nodes found." << std::endl;
         
         // If no congestion, we're done
         if (congestedNodeCount == 0) {
@@ -222,7 +222,7 @@ void Router::resolveCongestion(const std::vector<Net>& nets, const std::vector<s
             ripUpNetIds.push_back(netScores[i].first);
         }
         
-        std::cout << "Ripping up " << ripUpNetIds.size() << " nets with highest congestion scores." << std::endl;
+        // std::cout << "Ripping up " << ripUpNetIds.size() << " nets with highest congestion scores." << std::endl;
         
         // Extract the actual Net objects from the original netlist that correspond to ripUpNetIds
         std::vector<Net> netsToReroute;
@@ -271,17 +271,17 @@ void Router::resolveCongestion(const std::vector<Net>& nets, const std::vector<s
         
         // If we have nets to reroute, call routeAllNets with just those nets
         if (!netsToReroute.empty()) {
-            std::cout << "Rerouting " << netsToReroute.size() << " nets..." << std::endl;
+            // std::cout << "Rerouting " << netsToReroute.size() << " nets..." << std::endl;
 
             // Route the selected nets and append results to routingResults
             std::vector<NetRoute> newRoutes;
             for (auto& net : netsToReroute) {
                 NetRoute result = routeSingleNet(net, edges, nodes);
-                std::cout << "netId: " << result.netId << " isRouted: " << result.isRouted << std::endl;
+                // std::cout << "netId: " << result.netId << " isRouted: " << result.isRouted << std::endl;
                 routingResults.push_back(result);
             }
             
-            std::cout << "Rerouting complete." << std::endl;
+            // std::cout << "Rerouting complete." << std::endl;
         }
     }
     
@@ -377,20 +377,62 @@ double Router::calculateDistance(int fromId, int toId, const std::vector<Node>& 
     return std::sqrt(std::pow(nodes[fromId].beginX - nodes[toId].beginX, 2) + std::pow(nodes[fromId].beginY - nodes[toId].beginY, 2));
 }
 
+int count_in_box(int x1, int x2, int y1, int y2, std::map<int, std::vector<int>>& x_to_ys) {
+    // Make sure x1 <= x2 and y1 <= y2
+    if (x1 > x2) std::swap(x1, x2);
+    if (y1 > y2) std::swap(y1, y2);
+    
+    auto it_low = x_to_ys.lower_bound(x1);
+    auto it_high = x_to_ys.upper_bound(x2);
+    int total = 0;
+
+    for (auto it = it_low; it != it_high && it != x_to_ys.end(); ++it) {
+        const auto& ys = it->second;
+        
+        // Check if the vector is empty
+        if (ys.empty()) continue;
+        
+        // Need to check if vector is sorted
+        bool is_sorted = true;
+        for (size_t i = 1; i < ys.size(); ++i) {
+            if (ys[i-1] > ys[i]) {
+                is_sorted = false;
+                break;
+            }
+        }
+        
+        if (is_sorted) {
+            auto y_low = std::lower_bound(ys.begin(), ys.end(), y1);
+            auto y_high = std::upper_bound(ys.begin(), ys.end(), y2);
+            total += y_high - y_low;
+        } else {
+            // If not sorted, do a linear count
+            for (const auto& y : ys) {
+                if (y >= y1 && y <= y2) {
+                    total++;
+                }
+            }
+        }
+    }
+    
+    return total;
+}
+
+
 // Define priority calculation function
-double Router::computePriority(const Net& net, const std::vector<Node>& nodes) {
+double Router::computePriority(const Net& net, const std::vector<Node>& nodes, std::map<int, std::vector<int>>& x_to_ys) {
     int fanout = net.nodeIDs.size() - 1;
     double totalDist = 0.0;
     for (size_t j = 1; j < net.nodeIDs.size(); ++j) {
         totalDist += calculateDistance(net.nodeIDs[0], net.nodeIDs[j], nodes);
     }
     double avgDist = (fanout > 0) ? totalDist / fanout : 0.0;
-    
-    // Custom formula: fanout * avgDist (prioritize high fanout and long distances)
-    return 0.8 * fanout + 0.2 / (1 + avgDist);
+    int pinsInBox = count_in_box(net.max_min_xy.first.first, net.max_min_xy.first.second, net.max_min_xy.second.first, net.max_min_xy.second.second, x_to_ys);
+    // std::cout << "fanout: " << fanout << " pinsInBox: " << pinsInBox << " avgDist: " << avgDist << std::endl;
+    return 0.4 * fanout + 0.5 / (1 + pinsInBox) + 0.1 / (1 + avgDist);
 }
 
-void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) {
+void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes, std::map<int, std::vector<int>>& x_to_ys) {
     // Clear previous results
     clearRoutingResults();
     
@@ -424,34 +466,34 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
         pathfinder->setTimeout(pathTimeoutMs);
         
         // Set congestion penalty factor based on design
-        double congestionFactor = 5.0; // Default
+        double congestionFactor = 2.0; // Default
         double initialCongestion = 2.0; // Default
         
-        switch (designNumber) {
-            case 1:
-                congestionFactor = 4.0;
-                initialCongestion = 5;
-                break;
-            case 2:
-                congestionFactor = 1.0;
-                initialCongestion = 1;
-                break;
-            case 3:
-                congestionFactor = 6.0;
-                initialCongestion = 5;
-                break;
-            case 4:
-                congestionFactor = 7.0;
-                initialCongestion = 5;
-                break;
-            case 5:
-                congestionFactor = 10.0;
-                initialCongestion = 10;
-                break;
-            default:
-                // Use defaults
-                break;
-        }
+        // switch (designNumber) {
+        //     case 1:
+        //         congestionFactor = 4.0;
+        //         initialCongestion = 5;
+        //         break;
+        //     case 2:
+        //         congestionFactor = 1.0;
+        //         initialCongestion = 1;
+        //         break;
+        //     case 3:
+        //         congestionFactor = 6.0;
+        //         initialCongestion = 5;
+        //         break;
+        //     case 4:
+        //         congestionFactor = 7.0;
+        //         initialCongestion = 5;
+        //         break;
+        //     case 5:
+        //         congestionFactor = 10.0;
+        //         initialCongestion = 10;
+        //         break;
+        //     default:
+        //         // Use defaults
+        //         break;
+        // }
         
         // Initialize congestion penalty factor
         pathfinder->setCongestionPenaltyFactor(congestionFactor);
@@ -477,7 +519,7 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
     // 2. Precompute priorities for all nets
     std::vector<double> priorities(nets.size());
     for (size_t i = 0; i < nets.size(); ++i) {
-        priorities[i] = computePriority(nets[i], nodes);
+        priorities[i] = computePriority(nets[i], nodes, x_to_ys);
     }
 
     // 3. Sort indices based on computed priorities (descending order)
@@ -559,14 +601,14 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
             
             // Update congestion along this path - use design-specific initial congestion
             double initialCongestion = 2.0;
-            switch (designNumber) {
-                case 1: initialCongestion = 5; break;
-                case 2: initialCongestion = 5; break;
-                case 3: initialCongestion = 5; break;
-                case 4: initialCongestion = 5; break;
-                case 5: initialCongestion = 10; break;
-                default: break;
-            }
+            // switch (designNumber) {
+            //     case 1: initialCongestion = 5; break;
+            //     case 2: initialCongestion = 5; break;
+            //     case 3: initialCongestion = 5; break;
+            //     case 4: initialCongestion = 5; break;
+            //     case 5: initialCongestion = 10; break;
+            //     default: break;
+            // }
             
             pathfinder->updateCongestion(path, initialCongestion);
         }

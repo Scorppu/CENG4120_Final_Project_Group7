@@ -7,6 +7,7 @@
 #include <queue>
 #include <limits>
 #include <memory>
+#include <map>
 
 struct Node {
     int id;
@@ -21,6 +22,7 @@ struct Net {
     std::string name;
     std::vector<int> nodeIDs;
     std::vector<std::pair<int, int>> edges;
+    std::pair<std::pair<int, int>, std::pair<int, int>> max_min_xy;
 };
 
 // Simpler alternative to RoutingTree

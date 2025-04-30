@@ -44,7 +44,8 @@ int main(int argc, char* argv[]) {
     std::vector<Node> nodes;
     std::vector<std::vector<int>> edges;
     std::vector<Net> nets;
-    
+    std::map<int, std::vector<int>> x_to_ys;
+
     // Parse input files
     Reader reader = Reader(deviceFile, netlistFile);
 
@@ -57,7 +58,7 @@ int main(int argc, char* argv[]) {
         deviceParseEnd - deviceParseStart).count() << "s" << std::endl;
 
     auto netlistParseStart = std::chrono::steady_clock::now();
-    reader.parseNetlist(nets);
+    reader.parseNetlist(nets, nodes, x_to_ys);
     auto netlistParseEnd = std::chrono::steady_clock::now();
     
     std::cout << "Netlist parsing: " << std::chrono::duration_cast<std::chrono::seconds>(
@@ -101,8 +102,7 @@ int main(int argc, char* argv[]) {
 
     // Perform routing
     auto routingStart = std::chrono::steady_clock::now();
-    router.routeAllNets(nets, edges, nodes);
-    // stRouter.routeAllNets(nets, edges, nodes);
+    router.routeAllNets(nets, edges, nodes, x_to_ys);
     auto routingEnd = std::chrono::steady_clock::now();
     
     std::cout << "Total routing time: " << std::chrono::duration_cast<std::chrono::seconds>(

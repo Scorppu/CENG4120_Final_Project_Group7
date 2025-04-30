@@ -20,7 +20,7 @@ public:
     virtual bool parseDevice(std::vector<Node>& nodes, std::vector<std::vector<int>>& edges);
 
     // Parse the netlist file
-    virtual bool parseNetlist(std::vector<Net>& nets);
+    virtual bool parseNetlist(std::vector<Net>& nets, std::vector<Node>& nodes, std::map<int, std::vector<int>>& x_to_ys);
     
     // Add method to verify and display device parsing results
     void verifyDeviceParsing(std::vector<Node>& nodes, std::vector<std::vector<int>>& edges);

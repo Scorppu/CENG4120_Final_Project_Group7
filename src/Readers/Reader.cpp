@@ -131,7 +131,7 @@ bool Reader::parseDevice(std::vector<Node>& nodes, std::vector<std::vector<int>>
 
 
 // Parse the netlist file
-bool Reader::parseNetlist(std::vector<Net>& nets) {
+bool Reader::parseNetlist(std::vector<Net>& nets, std::vector<Node>& nodes, std::map<int, std::vector<int>>& x_to_ys) {
     std::ifstream netlistFile(netlistPath);
     if (!netlistFile.is_open()) {
         std::cerr << "Failed to open netlist file: " << netlistPath << std::endl;
@@ -167,16 +167,32 @@ bool Reader::parseNetlist(std::vector<Net>& nets) {
         int nodeId;
         std::istringstream iss(line);
         
+         
         // Parse ID and name
         iss >> net.id >> net.name;
         
         // Clear any existing node IDs and parse new ones
         net.nodeIDs.clear();
+        std::vector<std::pair<int, int>> xy;
+        int max_x = 0, min_x = 0, max_y = 0, min_y = 0;
         while(iss >> nodeId) {
+            // TODO: Add pin coordinates to layered sorted vector
+            // TODO: Calculate max(x,y) & min(x,y) for each net
+            if(nodes[nodeId].beginX > max_x) max_x = nodes[nodeId].beginX;
+            if(nodes[nodeId].beginX < min_x) min_x = nodes[nodeId].beginX;
+            if(nodes[nodeId].beginY > max_y) max_y = nodes[nodeId].beginY;
+            if(nodes[nodeId].beginY < min_y) min_y = nodes[nodeId].beginY;
+            xy.push_back(std::make_pair(nodes[nodeId].beginX, nodes[nodeId].beginY));
             net.nodeIDs.push_back(nodeId);
         }
+        net.max_min_xy = std::make_pair(std::make_pair(max_x, min_x), std::make_pair(max_y, min_y));
 
-        // push pin coordinates into tree for bounding box sorting
+        for (const auto& p : xy) {
+            x_to_ys[p.first].push_back(p.second);
+        }
+        for (auto& p1 : x_to_ys) {
+            std::sort(p1.second.begin(), p1.second.end());
+        }
     }
 
     netlistFile.close();

@@ -44,7 +44,7 @@ public:
     double calculateDistance(int fromId, int toId, const std::vector<Node>& nodes);
 
     // Compute priority for a net
-    double computePriority(const Net& net, const std::vector<Node>& nodes);
+    double computePriority(const Net& net, const std::vector<Node>& nodes, std::map<int, std::vector<int>>& x_to_ys);
     
     // Get routing results
     const std::vector<NetRoute>& getRoutingResults() const;
@@ -80,7 +80,7 @@ public:
     double calculateCost(int fromId, int toId);
 
     // Route all nets
-    virtual void routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes);
+    virtual void routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes, std::map<int, std::vector<int>>& x_to_ys);
     
     // Print routing results
     void printRoutingResults() const;
@@ -93,33 +93,33 @@ public:
 };
 
 // Derived class for Steiner Tree routing
-class SteinerTreeRouter : public Router {
-private:
-    // Collection of routing results using the simpler NetRoute structure
-    std::vector<NetRoute> routingResults;
+// class SteinerTreeRouter : public Router {
+// private:
+//     // Collection of routing results using the simpler NetRoute structure
+//     std::vector<NetRoute> routingResults;
     
-    // Shared pathfinding instance to avoid costly recreation
-    std::unique_ptr<AStarSearch> pathfinder;
+//     // Shared pathfinding instance to avoid costly recreation
+//     std::unique_ptr<AStarSearch> pathfinder;
     
-    // Reusable data structures to avoid repeated allocation
-    std::unordered_set<int> existingNodeIds;
-    std::vector<int> validSinkNodeIds;
-public:
-    // Constructor
-    SteinerTreeRouter();
+//     // Reusable data structures to avoid repeated allocation
+//     std::unordered_set<int> existingNodeIds;
+//     std::vector<int> validSinkNodeIds;
+// public:
+//     // Constructor
+//     SteinerTreeRouter();
     
-    std::vector<int> get_shortest_path(int src, int dest, const std::vector<std::vector<int>>& edges);
+//     std::vector<int> get_shortest_path(int src, int dest, const std::vector<std::vector<int>>& edges);
 
-    std::vector<std::vector<std::vector<int>>> compute_all_shortest_paths(
-        const std::unordered_set<int>& terminals, 
-        const std::vector<std::vector<int>>& edges
-    );
+//     std::vector<std::vector<std::vector<int>>> compute_all_shortest_paths(
+//         const std::unordered_set<int>& terminals, 
+//         const std::vector<std::vector<int>>& edges
+//     );
 
-    // Override routeSingleNet to use Steiner Tree algorithm
-    NetRoute routeSingleNet(Net& net, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) override;
+//     // Override routeSingleNet to use Steiner Tree algorithm
+//     NetRoute routeSingleNet(Net& net, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) override;
     
-    // Override routeAllNets to use Steiner Tree algorithm
-    void routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) override;
-};
+//     // Override routeAllNets to use Steiner Tree algorithm
+//     void routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) override;
+// };
 
 #endif // ROUTER_HPP
