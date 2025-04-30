@@ -48,6 +48,12 @@ public:
     
     // Get current congestion at a node
     double getCongestion(int nodeId) const;
+    
+    // Get the edges vector
+    const std::vector<std::vector<int>>& getEdges() const { return edges; }
+    
+    // Get the nodes vector
+    const std::vector<Node>& getNodes() const { return nodes; }
 
 private:
     // Reference to the graph structure

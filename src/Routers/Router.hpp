@@ -71,7 +71,7 @@ public:
     void setProgramStartTime(std::chrono::time_point<std::chrono::steady_clock> startTime);
 
     // Resolve congestions (Rip up and reroute)
-    virtual void resolveCongestion();
+    virtual void resolveCongestion(const std::vector<Net>& nets, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes);
 
     // Route a single net using A* Search
     virtual NetRoute routeSingleNet(Net& net, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes);

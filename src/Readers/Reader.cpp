@@ -175,6 +175,8 @@ bool Reader::parseNetlist(std::vector<Net>& nets) {
         while(iss >> nodeId) {
             net.nodeIDs.push_back(nodeId);
         }
+
+        // push pin coordinates into tree for bounding box sorting
     }
 
     netlistFile.close();
