@@ -10,6 +10,9 @@
 #include <memory>
 #include "../DataStructure.hpp"
 
+// Maximum capacity for any node - nodes should not exceed this usage
+constexpr int NODE_CAPACITY = 1; // Each node should be used by at most one net
+
 class AStarSearch {
 public:
     // Constructor
@@ -24,6 +27,10 @@ public:
     void findPath(int sourceNodeId, int targetNodeId, std::vector<int>& path, 
                  std::unordered_map<int, std::unordered_set<int>>& congestedNodes, int netId);
     
+    // Special pathfinding method for difficult nets with relaxed constraints
+    void findPathForDifficultNet(int sourceNodeId, int targetNodeId, std::vector<int>& path, 
+                 std::unordered_map<int, std::unordered_set<int>>& congestedNodes, int netId);
+    
     // Find paths from a source to multiple targets
     // Returns a vector of paths, one for each target
     std::vector<std::vector<int>> findPaths(int sourceNodeId, const std::vector<int>& targetNodeIds);
@@ -36,9 +43,21 @@ public:
     
     // Set timeout for pathfinding (in milliseconds)
     void setTimeout(int milliseconds);
+    
+    // Get current timeout value
+    int getTimeout() const { return timeoutMs; }
 
     // Set congestion penalty factor
     void setCongestionPenaltyFactor(double factor);
+    
+    // Get congestion penalty factor
+    double getCongestionPenaltyFactor() const { return congestionPenaltyFactor; }
+    
+    // Set flag to use relaxed constraints for difficult nets
+    void setUseRelaxedConstraints(bool value) { useRelaxedConstraints = value; }
+    
+    // Get flag indicating if relaxed constraints are in use
+    bool getUseRelaxedConstraints() const { return useRelaxedConstraints; }
     
     // Update congestion map after routing a path
     void updateCongestion(const std::vector<int>& path, double congestionIncrement = 1.0);
@@ -48,6 +67,12 @@ public:
     
     // Get current congestion at a node
     double getCongestion(int nodeId) const;
+    
+    // Check if a node would be overcongested if used by another net
+    bool isNodeOvercongested(int nodeId) const;
+    
+    // Check if a path would cause overcongestion
+    bool wouldPathCauseCongestion(const std::vector<int>& path) const;
     
     // Get the edges vector
     const std::vector<std::vector<int>>& getEdges() const { return edges; }
@@ -75,6 +100,9 @@ private:
     // Timeout in milliseconds
     int timeoutMs;
     
+    // Flag to use relaxed constraints for difficult nets
+    bool useRelaxedConstraints;
+    
     // Heuristic function (estimates cost from current to goal)
     std::function<double(int, int)> heuristicFunc;
     
@@ -92,6 +120,9 @@ private:
     
     // Congestion aware cost function
     double congestionAwareCost(int fromId, int toId);
+    
+    // Relaxed congestion cost function for difficult nets
+    double relaxedCongestionCost(int fromId, int toId);
     
     // Reconstruct path from came_from map
     void reconstructPath(

@@ -123,8 +123,8 @@ int main(int argc, char* argv[]) {
     if (verboseLogging) {
         std::cout << "Cleaning up resources..." << std::endl;
     }
-    router.clearAll();
-    // stRouter.clearAll();
+    // Router resources will be cleaned up automatically by the destructor
+    // router.clearAll();
     
     auto totalEnd = std::chrono::steady_clock::now();
     std::cout << "Total program time: " << std::chrono::duration_cast<std::chrono::seconds>(

@@ -24,7 +24,8 @@ AStarSearch::AStarSearch(const std::vector<std::vector<int>>& edges, const std::
     : edges(edges), 
       nodes(nodes), 
       timeoutMs(5000),
-      congestionPenaltyFactor(1.0)
+      congestionPenaltyFactor(1.0),
+      useRelaxedConstraints(false)
 {
     // Set default functions
     heuristicFunc = [this](int currentId, int targetId) {
@@ -109,8 +110,39 @@ double AStarSearch::congestionAwareCost(int fromId, int toId) {
     // Get congestion at the destination node
     double congestion = getCongestion(toId);
     
-    // Calculate congestion penalty
+    // Strictly enforce node capacity - make nodes at capacity effectively impassable
+    if (congestion >= NODE_CAPACITY) {
+        return std::numeric_limits<double>::infinity();
+    }
+    
+    // For nodes approaching capacity, apply exponential congestion penalty
+    double congestionPenalty = 0;
+    if (congestion > 0) {
+        // Exponential penalty based on how close to capacity
+        double capacityRatio = congestion / NODE_CAPACITY;
+        congestionPenalty = congestionPenaltyFactor * std::pow(10, capacityRatio * 2);
+    }
+    
+    // Return combined cost: base cost + congestion penalty
+    return baseCost + congestionPenalty;
+}
+
+// Relaxed congestion cost function for difficult nets
+double AStarSearch::relaxedCongestionCost(int fromId, int toId) {
+    // Base cost (uniform cost of 1)
+    double baseCost = defaultCost(fromId, toId);
+    
+    // Get congestion at the destination node
+    double congestion = getCongestion(toId);
+    
+    // Apply linear congestion penalty (much more lenient than exponential)
     double congestionPenalty = congestion * congestionPenaltyFactor;
+    
+    // Add a small penalty for heavily congested nodes, but never make them impassable
+    if (congestion >= NODE_CAPACITY) {
+        // Add higher penalty but keep it finite
+        congestionPenalty = congestionPenaltyFactor * std::min(10.0, congestion * 2);
+    }
     
     // Return combined cost: base cost + congestion penalty
     return baseCost + congestionPenalty;
@@ -142,7 +174,11 @@ void AStarSearch::setCongestionPenaltyFactor(double factor) {
 // Update congestion map after routing a path
 void AStarSearch::updateCongestion(const std::vector<int>& path, double congestionIncrement) {
     for (int nodeId : path) {
-        congestionMap[nodeId] += congestionIncrement;
+        // Only increment congestion if node is below capacity
+        double currentCongestion = getCongestion(nodeId);
+        if (currentCongestion < NODE_CAPACITY) {
+            congestionMap[nodeId] += congestionIncrement;
+        }
     }
 }
 
@@ -194,7 +230,12 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
     fScore[sourceNodeId] = heuristicFunc(sourceNodeId, targetNodeId);
     
     // Safety counter to prevent infinite loops
-    const int MAX_ITERATIONS = 50000;
+    // Use adaptive iteration limit based on estimated path complexity
+    double estimatedComplexity = heuristicFunc(sourceNodeId, targetNodeId);
+    int MAX_ITERATIONS = 50000 + static_cast<int>(estimatedComplexity * 1000);
+    // Cap max iterations to avoid excessive resource usage
+    MAX_ITERATIONS = std::min(MAX_ITERATIONS, 200000);
+    
     int iterations = 0;
     
     // Initialize variables
@@ -267,7 +308,7 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
 
 // Modified pathfinding method that also tracks congested nodes
 void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>& path, 
-                         std::unordered_map<int, std::unordered_set<int>>& congestedNodes, int netId) {
+                          std::unordered_map<int, std::unordered_set<int>>& congestedNodes, int netId) {
     // Special case for when source and target are the same
     if (sourceNodeId == targetNodeId) {
         return;
@@ -280,11 +321,11 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
     using SearchNode = std::pair<double, int>;  // <f_score, node_id>
     std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>> openSet;
     
-    // Maps to store metadata - consider dense arrays if node IDs are dense and consecutive
+    // Maps to store metadata
     gScore.clear(); // Cost from start to node
     fScore.clear(); // Estimated total cost
     cameFrom.clear();  // Parent pointers
-    closedSet.clear();      // Nodes already evaluated
+    closedSet.clear();  // Nodes already evaluated
     
     // Initialize with start node
     openSet.push({0, sourceNodeId});  // <f_score, node_id>
@@ -292,7 +333,12 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
     fScore[sourceNodeId] = heuristicFunc(sourceNodeId, targetNodeId);
     
     // Safety counter to prevent infinite loops
-    const int MAX_ITERATIONS = 50000;
+    // Use adaptive iteration limit based on estimated path complexity
+    double estimatedComplexity = heuristicFunc(sourceNodeId, targetNodeId);
+    int MAX_ITERATIONS = 50000 + static_cast<int>(estimatedComplexity * 1000);
+    // Cap max iterations to avoid excessive resource usage
+    MAX_ITERATIONS = std::min(MAX_ITERATIONS, 200000);
+    
     int iterations = 0;
     
     // Initialize variables
@@ -369,6 +415,115 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
     return;
 }
 
+// Special pathfinding method for difficult nets with relaxed constraints
+void AStarSearch::findPathForDifficultNet(int sourceNodeId, int targetNodeId, std::vector<int>& path, 
+             std::unordered_map<int, std::unordered_set<int>>& congestedNodes, int netId) {
+    // Special case for when source and target are the same
+    if (sourceNodeId == targetNodeId) {
+        return;
+    }
+    
+    // Start timing
+    auto startTime = std::chrono::steady_clock::now();
+    
+    // Priority queue for open set
+    using SearchNode = std::pair<double, int>;  // <f_score, node_id>
+    std::priority_queue<SearchNode, std::vector<SearchNode>, std::greater<SearchNode>> openSet;
+    
+    // Maps to store metadata
+    gScore.clear(); // Cost from start to node
+    fScore.clear(); // Estimated total cost
+    cameFrom.clear();  // Parent pointers
+    closedSet.clear();  // Nodes already evaluated
+    
+    // Initialize with start node
+    openSet.push({0, sourceNodeId});  // <f_score, node_id>
+    gScore[sourceNodeId] = 0;
+    fScore[sourceNodeId] = heuristicFunc(sourceNodeId, targetNodeId);
+    
+    // Safety counter to prevent infinite loops
+    // Use even higher iteration limit for difficult nets
+    double estimatedComplexity = heuristicFunc(sourceNodeId, targetNodeId);
+    int MAX_ITERATIONS = 100000 + static_cast<int>(estimatedComplexity * 2000);
+    // Cap max iterations to avoid excessive resource usage
+    MAX_ITERATIONS = std::min(MAX_ITERATIONS, 300000);
+    
+    int iterations = 0;
+    
+    // Initialize variables
+    int current;
+    double hValue, nodeCongestion, totalCost, tentativeGScore;
+
+    std::chrono::steady_clock::time_point currentTime;
+    std::chrono::milliseconds elapsedMs;
+    
+    // Main A* loop
+    while (!openSet.empty() && iterations < MAX_ITERATIONS) {
+        // Check for timeout - only every 100 iterations to reduce overhead
+        if (iterations % 100 == 0) {
+            currentTime = std::chrono::steady_clock::now();
+            elapsedMs = std::chrono::duration_cast<std::chrono::milliseconds>(currentTime - startTime);
+            if (elapsedMs.count() > timeoutMs) {
+                break;
+            }
+        }
+        
+        // Get node with lowest fScore
+        current = openSet.top().second;
+        openSet.pop();
+        iterations++;
+        
+        // If we've reached the target, reconstruct the path
+        if (current == targetNodeId) {
+            reconstructPath(cameFrom, current, path);
+            
+            // Track congested nodes for the entire path
+            for (int nodeId : path) {
+                congestedNodes[nodeId].insert(netId);
+            }
+            
+            return;
+        }
+        
+        // Skip if already evaluated
+        if (closedSet.count(current)) {
+            continue;
+        }
+        
+        // Mark as evaluated
+        closedSet.insert(current);
+        
+        // Process all neighbors
+        for (int neighbor : getNeighbors(current)) {
+            // Skip if already evaluated
+            if (closedSet.count(neighbor)) {
+                continue;
+            }
+            
+            // Calculate tentative gScore using relaxed congestion-aware cost
+            tentativeGScore = gScore[current] + relaxedCongestionCost(current, neighbor);
+            
+            // If this path is better than any previous one
+            if (gScore.find(neighbor) == gScore.end() || tentativeGScore < gScore[neighbor]) {
+                // Update metadata
+                cameFrom[neighbor] = current;
+                gScore[neighbor] = tentativeGScore;
+                // Use heuristic plus relaxed congestion penalty for more informed search
+                hValue = heuristicFunc(neighbor, targetNodeId);
+                nodeCongestion = getCongestion(neighbor);
+                totalCost = gScore[neighbor] + hValue + (nodeCongestion * congestionPenaltyFactor * 0.5); // Reduced penalty
+                fScore[neighbor] = totalCost;
+                
+                // Add to open set
+                openSet.push({fScore[neighbor], neighbor});
+            }
+        }
+    }
+    
+    // If we get here, no path was found
+    return;
+}
+
 // Find paths from a source to multiple targets
 // std::vector<std::vector<int>> AStarSearch::findPaths(int sourceNodeId, const std::vector<int>& targetNodeIds) {
 //     std::vector<std::vector<int>> paths;
@@ -413,4 +568,23 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
 // Set custom heuristic function
 void AStarSearch::setHeuristicFunction(std::function<double(int, int)> func) {
     heuristicFunc = func;
+}
+
+// Check if a node would be overcongested if used by another net
+bool AStarSearch::isNodeOvercongested(int nodeId) const {
+    auto it = congestionMap.find(nodeId);
+    if (it != congestionMap.end()) {
+        return it->second >= NODE_CAPACITY;
+    }
+    return false;
+}
+
+// Check if a path would cause overcongestion
+bool AStarSearch::wouldPathCauseCongestion(const std::vector<int>& path) const {
+    for (int nodeId : path) {
+        if (isNodeOvercongested(nodeId)) {
+            return true;
+        }
+    }
+    return false;
 }
