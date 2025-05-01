@@ -1,69 +1,135 @@
-#include "Interface/Reader.hpp"
-#include "Interface/Router.hpp"
-#include "Interface/Writer.hpp"
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <atomic>
+#include <unordered_map>
+#include <vector>
+#include <regex>
+#include <string>
+#include "DataStructure.hpp"
+#include "Readers/Reader.hpp"
+#include "Routers/Router.hpp"
+#include "Writers/Writer.hpp"
+
+// Helper function to extract design number from filename
+int extractDesignNumber(const std::string& filename) {
+    // Use regex to extract design number from patterns like "design1.netlist" or "design_1.netlist"
+    std::regex designPattern("design[_]?(\\d+)");
+    std::smatch matches;
+    
+    if (std::regex_search(filename, matches, designPattern) && matches.size() > 1) {
+        return std::stoi(matches[1].str());
+    }
+    
+    // Default to design 1 if no match found
+    return 1;
+}
 
 int main(int argc, char* argv[]) {
-    // Check command-line arguments
     if (argc != 4) {
-        std::cerr << "Usage: " << argv[0] << " <device> <netlist> <result>" << std::endl;
+        std::cerr << "Usage: <device_file> <netlist_file> <output_file>" << std::endl;
         return 1;
     }
+
+    std::string deviceFile = argv[1];
+    std::string netlistFile = argv[2];
+    std::string outputFile = argv[3];
+
+    auto totalStart = std::chrono::steady_clock::now();
     
-    std::string devicePath = argv[1];
-    std::string netlistPath = argv[2];
-    std::string resultPath = argv[3];
+    // Minimized logging to improve performance
+    bool verboseLogging = false;
     
-    // Start timing
-    auto startTime = std::chrono::high_resolution_clock::now();
-    
+    // Create and scope all data structures
+    std::vector<Node> nodes;
+    std::vector<std::vector<int>> edges;
+    std::vector<Net> nets;
+    std::map<int, std::vector<int>> x_to_ys;
+
     // Parse input files
-    std::cout << "Parsing device file..." << std::endl;
-    if (!parseDevice(devicePath)) {
-        return 1;
+    Reader reader = Reader(deviceFile, netlistFile);
+
+    auto deviceParseStart = std::chrono::steady_clock::now();
+    reader.parseDevice(nodes, edges);
+    auto deviceParseEnd = std::chrono::steady_clock::now();
+    std::cout << "Nodes: " << nodes.size() << ", Edges: " << edges.size() << std::endl;
+    
+    std::cout << "Device parsing: " << std::chrono::duration_cast<std::chrono::seconds>(
+        deviceParseEnd - deviceParseStart).count() << "s" << std::endl;
+
+    auto netlistParseStart = std::chrono::steady_clock::now();
+    reader.parseNetlist(nets, nodes, x_to_ys);
+    auto netlistParseEnd = std::chrono::steady_clock::now();
+    
+    std::cout << "Netlist parsing: " << std::chrono::duration_cast<std::chrono::seconds>(
+        netlistParseEnd - netlistParseStart).count() << "s" << std::endl;
+    std::cout << "Nets: " << nets.size() << std::endl;
+    
+    // Estimate memory footprint and pre-allocate if possible
+    std::cout << "Estimating memory usage..." << std::endl;
+    size_t estimatedNodeMemory = nodes.size() * sizeof(Node);
+    size_t estimatedEdgeMemory = 0;
+    for (const auto& edge : edges) {
+        estimatedEdgeMemory += edge.size() * sizeof(int) + sizeof(std::vector<int>);
     }
+    size_t estimatedNetMemory = nets.size() * sizeof(Net);
+    std::cout << "Estimated memory usage: " 
+              << (estimatedNodeMemory + estimatedEdgeMemory + estimatedNetMemory) / (1024 * 1024) 
+              << "MB" << std::endl;
     
-    std::cout << "Parsing netlist file..." << std::endl;
-    if (!parseNetlist(netlistPath)) {
-        return 1;
+    // Create router 
+    Router router;
+    // SteinerTreeRouter stRouter;
+    
+    // Extract design number from netlist filename and set in router
+    int designNumber = extractDesignNumber(netlistFile);
+    std::cout << "Detected design number: " << designNumber << std::endl;
+    
+    // Set design-specific parameters
+    router.setDesignNumber(designNumber);
+    
+    // Pass the program start time to the router for total time calculation
+    router.setProgramStartTime(totalStart);
+    
+    // Set global timeout (default 249 seconds, but can be adjusted)
+    if (designNumber == 5) {
+        // For design 5, we need to stay under 250s total time
+        router.setTimeout(249);
+    } else {
+        // For other designs, set a more generous timeout
+        router.setTimeout(1000);
     }
-    
-    // Setup timeout thread
-    int timeLimit = (nets.size() > 10000) ? 250 : 100; // Design 5 has more nets
-    std::thread timeoutThread([timeLimit]() {
-        std::this_thread::sleep_for(std::chrono::seconds(timeLimit - 5)); // Give 5 seconds for cleanup
-        timedOut = true;
-        std::cout << "Timeout reached! Finishing up..." << std::endl;
-    });
-    timeoutThread.detach();
-    
+
     // Perform routing
-    std::cout << "Routing " << nets.size() << " nets..." << std::endl;
-    int numThreads = std::min(8, static_cast<int>(std::thread::hardware_concurrency()));
-    std::cout << "Using " << numThreads << " threads" << std::endl;
+    auto routingStart = std::chrono::steady_clock::now();
+    router.routeAllNets(nets, edges, nodes, x_to_ys);
+    auto routingEnd = std::chrono::steady_clock::now();
     
-    parallelPathFinder(numThreads);
+    std::cout << "Total routing time: " << std::chrono::duration_cast<std::chrono::seconds>(
+        routingEnd - routingStart).count() << "s" << std::endl;
+        
+    // Print routing results
+    router.printRoutingResults();
+    // stRouter.printRoutingResults();
     
-    // Analyze results
-    int routedNets = countRoutedNets();
-    bool congested = hasCongestion();
-    int wirelength = calculateWirelength();
+    // Write output to file
+    Writer writer(outputFile);
+    writer.setRoutingResults(&router.getRoutingResults());
+    // writer.setRoutingResults(&stRouter.getRoutingResults());
+    writer.setOriginalNets(&nets);
+    writer.writeOutput();
     
-    // Write output
-    std::cout << "Writing routing result..." << std::endl;
-    if (!writeRoutingResult(resultPath)) {
-        return 1;
+    // Clean up resources
+    if (verboseLogging) {
+        std::cout << "Cleaning up resources..." << std::endl;
     }
+    router.clearAll();
+    // stRouter.clearAll();
     
-    // Calculate runtime
-    auto endTime = std::chrono::high_resolution_clock::now();
-    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
-    double runtimeSeconds = duration.count() / 1000.0;
-    
-    // Print statistics
-    printRoutingStats(routedNets, congested, wirelength, runtimeSeconds);
-    
+    auto totalEnd = std::chrono::steady_clock::now();
+    std::cout << "Total program time: " << std::chrono::duration_cast<std::chrono::seconds>(
+        totalEnd - totalStart).count() << "s" << std::endl;
+
     return 0;
-} 
+}
+
