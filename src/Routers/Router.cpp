@@ -293,82 +293,61 @@ NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& e
     NetRoute netRoute;
     netRoute.netId = net.id;
     
-    // Validate that all node IDs exist in the graph
-    for (size_t j = 0; j < net.nodeIDs.size(); ++j) {
-        if (existingNodeIds.find(net.nodeIDs[j]) == existingNodeIds.end()) {
-            std::cerr << "Warning: Node ID " << net.nodeIDs[j] << " in net " << net.id 
-                    << " does not exist in the graph. Skipping this node." << std::endl;
-        }
-    }
+    // Route through the MST edges
+    bool allEdgesRouted = true;
+    int successfulEdges = 0;
     
-    // Clear the valid sink node IDs vector (reused across calls)
-    validSinkNodeIds.clear();
-    
-    // First node is the source (driver), rest are sinks
-    int sourceNodeId = net.nodeIDs[0];
-    
-    // Collect only valid sink node IDs
-    for (size_t j = 1; j < net.nodeIDs.size(); ++j) {
-        int sinkId = net.nodeIDs[j];
-        if (existingNodeIds.find(sinkId) != existingNodeIds.end()) {
-            validSinkNodeIds.push_back(sinkId);
-        }
-    }
-    
-    // Route from source to each sink
-    std::unordered_set<int> remainingSinks(validSinkNodeIds.begin(), validSinkNodeIds.end());
-    bool allSinksRouted = true;
-    
-    
-    for (int sinkId : validSinkNodeIds) {
-        // Find path from source to this sink
+    for (size_t i = 0; i < net.mst_edges.size(); ++i) {
+        // Find path between the two nodes of this MST edge
         std::vector<int> path;
-        pathfinder->findPath(sourceNodeId, sinkId, path, congestedNodes, net.id);
+        pathfinder->findPath(net.mst_edges[i].first, net.mst_edges[i].second, path, congestedNodes, net.id);
         
-        if (path.empty() || path.size() < 2) {
-            // Failed to find a path to this sink
-            allSinksRouted = false;
+        // Skip if path is empty or too short
+        if (path.size() < 2) {
+            allEdgesRouted = false;
+            std::cout << "Path is empty or too short for nodes " << net.mst_edges[i].first << " and " << net.mst_edges[i].second << std::endl;
             continue;
         }
         
         // Convert path to edges and add to NetRoute
         std::vector<std::pair<int, int>> newEdges;
+        // Only reserve space if we have a valid path with at least 2 nodes
         newEdges.reserve(path.size() - 1);
-        for (size_t i = 0; i < path.size() - 1; ++i) {
-            newEdges.push_back({path[i], path[i+1]});
+        
+        for (size_t j = 0; j < path.size() - 1; ++j) {
+            newEdges.push_back({path[j], path[j+1]});
         }
         netRoute.addEdges(newEdges);
         
-        // Mark this sink as routed
-        remainingSinks.erase(sinkId);
+        successfulEdges++;
     }
                 
     // Set success flag on NetRoute
-    netRoute.isRouted = remainingSinks.empty();
+    netRoute.isRouted = allEdgesRouted;
     
     // If not all sinks were successfully routed, remove this net from congestedNodes
-    if (!netRoute.isRouted) {
-        // Remove this net from all congested nodes
-        for (auto& nodePair : congestedNodes) {
-            nodePair.second.erase(net.id);
+    // if (!netRoute.isRouted) {
+    //     // Remove this net from all congested nodes
+    //     for (auto& nodePair : congestedNodes) {
+    //         nodePair.second.erase(net.id);
             
-            // If a node no longer has any nets, remove it from the map
-            if (nodePair.second.empty()) {
-                // Can't erase while iterating, so mark for removal
-                // We'll handle cleanup in resolveCongestion
-            }
-        }
+    //         // If a node no longer has any nets, remove it from the map
+    //         if (nodePair.second.empty()) {
+    //             // Can't erase while iterating, so mark for removal
+    //             // We'll handle cleanup in resolveCongestion
+    //         }
+    //     }
         
-        // Remove empty entries
-        auto it = congestedNodes.begin();
-        while (it != congestedNodes.end()) {
-            if (it->second.empty()) {
-                it = congestedNodes.erase(it);
-            } else {
-                ++it;
-            }
-        }
-    }
+    //     // Remove empty entries
+    //     auto it = congestedNodes.begin();
+    //     while (it != congestedNodes.end()) {
+    //         if (it->second.empty()) {
+    //             it = congestedNodes.erase(it);
+    //         } else {
+    //             ++it;
+    //         }
+    //     }
+    // }
     
     return netRoute;
 }
@@ -587,6 +566,7 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
         if (result.isRouted && !result.edges.empty()) {
             // Extract the full path from edges
             std::vector<int> path;
+            // Only reserve if we actually have edges
             path.reserve(result.edges.size() + 1);
 
             // Add the first node of the first edge
@@ -600,7 +580,7 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
             }
             
             // Update congestion along this path - use design-specific initial congestion
-            double initialCongestion = 2.0;
+            double initialCongestion = 0.0;
             // switch (designNumber) {
             //     case 1: initialCongestion = 5; break;
             //     case 2: initialCongestion = 5; break;
@@ -622,11 +602,11 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
 
 
     // Resolve congestion
-    auto resolveStartTime = std::chrono::steady_clock::now();
-    resolveCongestion(nets, edges, nodes);
-    auto resolveEndTime = std::chrono::steady_clock::now();
-    auto resolveTime = std::chrono::duration_cast<std::chrono::milliseconds>(resolveEndTime - resolveStartTime).count();
-    std::cout << "Resolving congestion took " << resolveTime << "ms" << std::endl;
+    // auto resolveStartTime = std::chrono::steady_clock::now();
+    // resolveCongestion(nets, edges, nodes);
+    // auto resolveEndTime = std::chrono::steady_clock::now();
+    // auto resolveTime = std::chrono::duration_cast<std::chrono::milliseconds>(resolveEndTime - resolveStartTime).count();
+    // std::cout << "Resolving congestion took " << resolveTime << "ms" << std::endl;
 }
 
 // Print routing results

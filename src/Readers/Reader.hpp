@@ -30,6 +30,9 @@ public:
     
     // Verify netlist parsing results
     void verifyNetlist(std::vector<Net>& nets);
+
+    // Get MST edges for a net
+    std::vector<std::pair<int, int>> getMSTEdges(Net& net, std::vector<Node>& nodes);
 };
 
 #endif // READER_HPP

@@ -21,7 +21,7 @@ struct Net {
     int id;
     std::string name;
     std::vector<int> nodeIDs;
-    std::vector<std::pair<int, int>> edges;
+    std::vector<std::pair<int, int>> mst_edges;
     std::pair<std::pair<int, int>, std::pair<int, int>> max_min_xy;
 };
 

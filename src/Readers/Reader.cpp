@@ -3,6 +3,7 @@
 #include <sstream>
 #include <vector>
 #include <unordered_map>
+#include <cmath>
 #include <string>
 #include <iterator>
 #include <algorithm>
@@ -129,6 +130,104 @@ bool Reader::parseDevice(std::vector<Node>& nodes, std::vector<std::vector<int>>
     return true;
 }
 
+// std::vector<std::pair<int, int>> Reader::getMSTEdges(Net& net, std::vector<Node>& nodes) {
+//     // TODO: Implement Prim's algorithm to get MST edges
+//     // X and Y coordinates of a node within the netlist is found in nodes[nodeID].beginX and nodes[nodeID].beginY
+//     // required nodeID is found in net.nodeIDs
+//     // Use Prim's algorithm to find the minimum spanning tree
+//     size_t n = net.nodeIDs.size();
+//     if (n == 0) return {};
+
+//     std::vector<bool> in_mst(n, false);
+//     std::vector<std::pair<double, int>> min_edge(n, {std::numeric_limits<double>::infinity(), -1});
+//     min_edge[0] = {0.0, -1};
+
+//     std::priority_queue<std::pair<double, int>, std::vector<std::pair<double, int>>, std::greater<std::pair<double, int>>> pq;
+//     pq.push({0.0, 0});
+
+//     std::vector<std::pair<int, int>> mst_edges;
+
+//     while (!pq.empty()) {
+//         double current_weight = pq.top().first;
+//         int u = pq.top().second;
+//         pq.pop();
+
+//         if (in_mst[u]) continue;
+//         in_mst[u] = true;
+
+//         if (min_edge[u].second != -1) {
+//             mst_edges.emplace_back(net.nodeIDs[min_edge[u].second], net.nodeIDs[u]);
+//         }
+
+//         for (int v = 0; v < n; ++v) {
+//             if (!in_mst[v]) {
+//                 int id_u = net.nodeIDs[u];
+//                 int id_v = net.nodeIDs[v];
+//                 double dx = nodes[id_u].beginX - nodes[id_v].beginX;
+//                 double dy = nodes[id_u].beginY - nodes[id_v].beginY;
+//                 double distance = sqrt(dx*dx + dy*dy);
+
+//                 if (distance < min_edge[v].first) {
+//                     min_edge[v] = {distance, u};
+//                     pq.push({distance, v});
+//                 }
+//             }
+//         }
+//     }
+
+//     return mst_edges;
+// }
+
+
+std::vector<std::pair<int, int>> Reader::getMSTEdges(Net& net, std::vector<Node>& nodes) {
+    auto& nodeIDs = net.nodeIDs;
+    size_t n = nodeIDs.size();
+    if (n <= 1) return {};  // Handle 0 or 1 node
+
+    std::vector<bool> in_mst(n, false);
+    std::vector<std::pair<double, int>> min_edge(n, 
+        {std::numeric_limits<double>::infinity(), -1});
+    min_edge[0] = {0.0, -1};
+
+    using QueueElem = std::pair<double, int>;
+    std::priority_queue<QueueElem, std::vector<QueueElem>, std::greater<QueueElem>> pq;
+    pq.push({0.0, 0});
+
+    std::vector<std::pair<int, int>> mst_edges;
+
+    while (!pq.empty()) {
+        double current_weight = pq.top().first;
+        int u = pq.top().second;
+        pq.pop();
+
+        // Skip stale entries
+        if (current_weight > min_edge[u].first) continue;
+        if (in_mst[u]) continue;
+        in_mst[u] = true;
+
+        if (min_edge[u].second != -1) {
+            mst_edges.push_back(std::make_pair(nodeIDs[min_edge[u].second], nodeIDs[u]));
+        }
+
+        for (int v = 0; v < n; ++v) {
+            if (!in_mst[v]) {
+                int id_u = nodeIDs[u];  // Verify these are valid node IDs
+                int id_v = nodeIDs[v];  // Ensure nodes[id_u] exists
+                double dx = nodes[id_u].beginX - nodes[id_v].beginX;
+                double dy = nodes[id_u].beginY - nodes[id_v].beginY;
+                double distance_sq = dx*dx + dy*dy;  // Avoid sqrt
+
+                if (distance_sq < min_edge[v].first) {
+                    min_edge[v] = {distance_sq, u};
+                    pq.push({distance_sq, v});
+                }
+            }
+        }
+    }
+
+    return mst_edges;
+}
+
 
 // Parse the netlist file
 bool Reader::parseNetlist(std::vector<Net>& nets, std::vector<Node>& nodes, std::map<int, std::vector<int>>& x_to_ys) {
@@ -186,6 +285,8 @@ bool Reader::parseNetlist(std::vector<Net>& nets, std::vector<Node>& nodes, std:
             net.nodeIDs.push_back(nodeId);
         }
         net.max_min_xy = std::make_pair(std::make_pair(max_x, min_x), std::make_pair(max_y, min_y));
+
+        net.mst_edges = getMSTEdges(net, nodes);
 
         for (const auto& p : xy) {
             x_to_ys[p.first].push_back(p.second);
