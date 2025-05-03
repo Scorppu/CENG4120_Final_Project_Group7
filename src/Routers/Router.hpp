@@ -90,6 +90,9 @@ public:
     
     // Calculate congestion score for a net
     double calculateCongestionScore(int netId, const std::vector<int>& path) const;
+
+    // Validate if an MST edge has a viable path in the device graph
+    bool validateMSTEdge(int sourceId, int targetId);
 };
 
 // Derived class for Steiner Tree routing

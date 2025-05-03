@@ -184,9 +184,17 @@ std::vector<std::pair<int, int>> Reader::getMSTEdges(Net& net, std::vector<Node>
     size_t n = nodeIDs.size();
     if (n <= 1) return {};  // Handle 0 or 1 node
 
+    // Validate node IDs first
+    for (int id : nodeIDs) {
+        if (id < 0 || id >= static_cast<int>(nodes.size())) {
+            std::cerr << "Invalid node ID in net: " << id << std::endl;
+            // Handle invalid ID - return empty or throw exception
+            return {};
+        }
+    }
+
     std::vector<bool> in_mst(n, false);
-    std::vector<std::pair<double, int>> min_edge(n, 
-        {std::numeric_limits<double>::infinity(), -1});
+    std::vector<std::pair<double, int>> min_edge(n, {std::numeric_limits<double>::infinity(), -1});
     min_edge[0] = {0.0, -1};
 
     using QueueElem = std::pair<double, int>;
@@ -194,32 +202,39 @@ std::vector<std::pair<int, int>> Reader::getMSTEdges(Net& net, std::vector<Node>
     pq.push({0.0, 0});
 
     std::vector<std::pair<int, int>> mst_edges;
+    mst_edges.reserve(n - 1); // We'll have at most n-1 edges in the MST
 
     while (!pq.empty()) {
         double current_weight = pq.top().first;
         int u = pq.top().second;
         pq.pop();
 
+        // Skip if already in MST
+        if (in_mst[u]) continue;
+        
         // Skip stale entries
         if (current_weight > min_edge[u].first) continue;
-        if (in_mst[u]) continue;
+        
         in_mst[u] = true;
 
         if (min_edge[u].second != -1) {
-            mst_edges.push_back(std::make_pair(nodeIDs[min_edge[u].second], nodeIDs[u]));
+            std::pair<int, int> edge = std::make_pair(nodeIDs[min_edge[u].second], nodeIDs[u]);
+            mst_edges.push_back(edge);
         }
 
         for (int v = 0; v < n; ++v) {
             if (!in_mst[v]) {
-                int id_u = nodeIDs[u];  // Verify these are valid node IDs
-                int id_v = nodeIDs[v];  // Ensure nodes[id_u] exists
-                double dx = nodes[id_u].beginX - nodes[id_v].beginX;
-                double dy = nodes[id_u].beginY - nodes[id_v].beginY;
-                double distance_sq = dx*dx + dy*dy;  // Avoid sqrt
-
-                if (distance_sq < min_edge[v].first) {
-                    min_edge[v] = {distance_sq, u};
-                    pq.push({distance_sq, v});
+                int id_u = nodeIDs[u];
+                int id_v = nodeIDs[v];
+                
+                // Use manhattan distance instead of euclidean for FPGA routing
+                double distance = std::abs(nodes[id_u].beginX - nodes[id_v].beginX) + 
+                                  std::abs(nodes[id_u].beginY - nodes[id_v].beginY);
+                
+                // Only update if this is a better distance
+                if (distance < min_edge[v].first) {
+                    min_edge[v] = {distance, u};
+                    pq.push({distance, v});
                 }
             }
         }
@@ -287,6 +302,7 @@ bool Reader::parseNetlist(std::vector<Net>& nets, std::vector<Node>& nodes, std:
         net.max_min_xy = std::make_pair(std::make_pair(max_x, min_x), std::make_pair(max_y, min_y));
 
         net.mst_edges = getMSTEdges(net, nodes);
+        
 
         for (const auto& p : xy) {
             x_to_ys[p.first].push_back(p.second);

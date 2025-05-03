@@ -24,6 +24,11 @@ public:
     void findPath(int sourceNodeId, int targetNodeId, std::vector<int>& path, 
                  std::unordered_map<int, std::unordered_set<int>>& congestedNodes, int netId);
     
+    // New overload that uses a previous path for backtracking when direct routing fails
+    void findPath(int sourceNodeId, int targetNodeId, std::vector<int>& path,
+                  std::unordered_map<int, std::unordered_set<int>>& congestedNodes, int netId,
+                  const std::vector<int>& prevPath);
+    
     // Find paths from a source to multiple targets
     // Returns a vector of paths, one for each target
     std::vector<std::vector<int>> findPaths(int sourceNodeId, const std::vector<int>& targetNodeIds);

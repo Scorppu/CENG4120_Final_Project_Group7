@@ -231,11 +231,27 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
             continue;
         }
         
+        // EARLY DETECTION: Check if this node has any valid neighbors before proceeding
+        const std::vector<int>& neighbors = getNeighbors(current);
+        bool hasValidNeighbor = false;
+        for (int neighbor : neighbors) {
+            if (!closedSet.count(neighbor)) {
+                hasValidNeighbor = true;
+                break;
+            }
+        }
+        
+        // If this node has no valid neighbors, mark as evaluated and skip
+        if (!hasValidNeighbor && !neighbors.empty()) {
+            closedSet.insert(current);
+            continue;
+        }
+        
         // Mark as evaluated
         closedSet.insert(current);
         
         // Process all neighbors - OPTIMIZED to avoid edge tracking overhead
-        for (int neighbor : getNeighbors(current)) {
+        for (int neighbor : neighbors) {
             // Skip if already evaluated
             if (closedSet.count(neighbor)) {
                 continue;
@@ -270,6 +286,12 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
                          std::unordered_map<int, std::unordered_set<int>>& congestedNodes, int netId) {
     // Special case for when source and target are the same
     if (sourceNodeId == targetNodeId) {
+        return;
+    }
+
+    // Check if source node has any valid neighbors
+    const std::vector<int>& sourceNeighbors = getNeighbors(sourceNodeId);
+    if (sourceNeighbors.empty()) {
         return;
     }
     
@@ -335,11 +357,27 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
             continue;
         }
         
+        // EARLY DETECTION: Check if this node has any valid neighbors before proceeding
+        const std::vector<int>& neighbors = getNeighbors(current);
+        bool hasValidNeighbor = false;
+        for (int neighbor : neighbors) {
+            if (!closedSet.count(neighbor)) {
+                hasValidNeighbor = true;
+                break;
+            }
+        }
+        
+        // If this node has no valid neighbors, mark as evaluated and skip
+        if (!hasValidNeighbor && !neighbors.empty()) {
+            closedSet.insert(current);
+            continue;
+        }
+        
         // Mark as evaluated
         closedSet.insert(current);
         
         // Process all neighbors - OPTIMIZED to avoid edge tracking overhead
-        for (int neighbor : getNeighbors(current)) {
+        for (int neighbor : neighbors) {
             // Skip if already evaluated
             if (closedSet.count(neighbor)) {
                 continue;
@@ -362,6 +400,64 @@ void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>&
                 // Add to open set
                 openSet.push({fScore[neighbor], neighbor});
             }
+        }
+    }
+    
+    // If we get here, no path was found
+    return;
+}
+
+// New overload that uses a previous path for backtracking when direct routing fails
+void AStarSearch::findPath(int sourceNodeId, int targetNodeId, std::vector<int>& path,
+                         std::unordered_map<int, std::unordered_set<int>>& congestedNodes, int netId,
+                         const std::vector<int>& prevPath) {
+    // Special case for when source and target are the same
+    if (sourceNodeId == targetNodeId) {
+        return;
+    }
+    
+    // First try direct path from source to target
+    findPath(sourceNodeId, targetNodeId, path, congestedNodes, netId);
+    
+    // If path found, we're done
+    if (path.size() >= 2) {
+        return;
+    }
+    
+    // Quick check if source node has any neighbors at all
+    const std::vector<int>& sourceNeighbors = getNeighbors(sourceNodeId);
+    if (sourceNeighbors.empty()) {
+        // Source node has no outgoing connections, backtracking is needed
+        path.clear();
+    } else {
+        // Check if all neighbors are in closed set (all explored)
+        bool hasValidNeighbor = false;
+        for (int neighbor : sourceNeighbors) {
+            if (!closedSet.count(neighbor)) {
+                hasValidNeighbor = true;
+                break;
+            }
+        }
+        
+        // If no valid neighbors, clear path and proceed with backtracking
+        if (!hasValidNeighbor) {
+            path.clear();
+        }
+    }
+
+    // std::cout << "Can't explore from this node! Backtracking..." << std::endl;
+    // If direct path fails and we have a previous path, try backtracking
+    if (!prevPath.empty()) {
+        // Try to find a path from the last node in prevPath to the target
+        for (int i = prevPath.size() - 1; i >= 0; --i) {
+            // Iteratively backtrack until we find a node that we can explore from
+            findPath(prevPath[i], targetNodeId, path, congestedNodes, netId);
+            // If path is found return
+            if (path.size() >= 2) {
+                return;
+            } else {
+                path.clear();
+            }        
         }
     }
     

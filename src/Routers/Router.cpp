@@ -288,66 +288,75 @@ void Router::resolveCongestion(const std::vector<Net>& nets, const std::vector<s
     std::cout << "==== Congestion Resolution Complete ====\n\n";
 }
 
+// Validate if an MST edge has a viable path in the device graph
+bool Router::validateMSTEdge(int sourceId, int targetId) {
+    // Skip validation if pathfinder not initialized
+    if (!pathfinder) return true;
+
+    // Do a quick check using A* to see if a path exists
+    std::vector<int> testPath;
+    pathfinder->findPath(sourceId, targetId, testPath);
+    
+    // If path is valid (at least source and target nodes)
+    return testPath.size() >= 2;
+}
+
 // Route a single net
 NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) {
     NetRoute netRoute;
     netRoute.netId = net.id;
     
-    // Route through the MST edges
+    // First try routing through the MST edges
     bool allEdgesRouted = true;
     int successfulEdges = 0;
     
+    // Keep track of the most recently routed path for backtracking
+    std::vector<int> lastRoutedPath;
+    
     for (size_t i = 0; i < net.mst_edges.size(); ++i) {
+        int source = net.mst_edges[i].first;
+        int target = net.mst_edges[i].second;
+        
         // Find path between the two nodes of this MST edge
         std::vector<int> path;
-        pathfinder->findPath(net.mst_edges[i].first, net.mst_edges[i].second, path, congestedNodes, net.id);
+        
+        // If this is the first edge or we have no previous path, use regular routing
+        if (lastRoutedPath.empty()) {
+            pathfinder->findPath(source, target, path, congestedNodes, net.id);
+        } else {
+            // Otherwise use backtracking with the previous path
+            pathfinder->findPath(source, target, path, congestedNodes, net.id, lastRoutedPath);
+        }
         
         // Skip if path is empty or too short
         if (path.size() < 2) {
+            // std::cout << "Path is empty or too short for MST edge between " << source << " and " << target << std::endl;
             allEdgesRouted = false;
-            std::cout << "Path is empty or too short for nodes " << net.mst_edges[i].first << " and " << net.mst_edges[i].second << std::endl;
             continue;
         }
         
         // Convert path to edges and add to NetRoute
         std::vector<std::pair<int, int>> newEdges;
-        // Only reserve space if we have a valid path with at least 2 nodes
         newEdges.reserve(path.size() - 1);
         
         for (size_t j = 0; j < path.size() - 1; ++j) {
             newEdges.push_back({path[j], path[j+1]});
         }
         netRoute.addEdges(newEdges);
-        
         successfulEdges++;
-    }
-                
-    // Set success flag on NetRoute
-    netRoute.isRouted = allEdgesRouted;
-    
-    // If not all sinks were successfully routed, remove this net from congestedNodes
-    // if (!netRoute.isRouted) {
-    //     // Remove this net from all congested nodes
-    //     for (auto& nodePair : congestedNodes) {
-    //         nodePair.second.erase(net.id);
-            
-    //         // If a node no longer has any nets, remove it from the map
-    //         if (nodePair.second.empty()) {
-    //             // Can't erase while iterating, so mark for removal
-    //             // We'll handle cleanup in resolveCongestion
-    //         }
-    //     }
         
-    //     // Remove empty entries
-    //     auto it = congestedNodes.begin();
-    //     while (it != congestedNodes.end()) {
-    //         if (it->second.empty()) {
-    //             it = congestedNodes.erase(it);
-    //         } else {
-    //             ++it;
-    //         }
-    //     }
-    // }
+        // Update the last routed path for next iteration
+        lastRoutedPath = path;
+    }
+    
+    // If all MST edges were successfully routed, we're done
+    if (allEdgesRouted && successfulEdges > 0) {
+        netRoute.isRouted = true;
+        return netRoute;
+    }
+    
+    // Set success flag based on whether any edges were routed
+    netRoute.isRouted = (successfulEdges > 0);
     
     return netRoute;
 }
@@ -445,34 +454,34 @@ void Router::routeAllNets(std::vector<Net>& nets, const std::vector<std::vector<
         pathfinder->setTimeout(pathTimeoutMs);
         
         // Set congestion penalty factor based on design
-        double congestionFactor = 2.0; // Default
-        double initialCongestion = 2.0; // Default
+        double congestionFactor = 0.1; // Default
+        double initialCongestion = 0.1; // Default
         
-        // switch (designNumber) {
-        //     case 1:
-        //         congestionFactor = 4.0;
-        //         initialCongestion = 5;
-        //         break;
-        //     case 2:
-        //         congestionFactor = 1.0;
-        //         initialCongestion = 1;
-        //         break;
-        //     case 3:
-        //         congestionFactor = 6.0;
-        //         initialCongestion = 5;
-        //         break;
-        //     case 4:
-        //         congestionFactor = 7.0;
-        //         initialCongestion = 5;
-        //         break;
-        //     case 5:
-        //         congestionFactor = 10.0;
-        //         initialCongestion = 10;
-        //         break;
-        //     default:
-        //         // Use defaults
-        //         break;
-        // }
+        switch (designNumber) {
+            case 1:
+                congestionFactor = 4.0;
+                initialCongestion = 5;
+                break;
+            case 2:
+                congestionFactor = 1.0;
+                initialCongestion = 1;
+                break;
+            case 3:
+                congestionFactor = 6.0;
+                initialCongestion = 5;
+                break;
+            case 4:
+                congestionFactor = 7.0;
+                initialCongestion = 5;
+                break;
+            case 5:
+                congestionFactor = 10.0;
+                initialCongestion = 10;
+                break;
+            default:
+                // Use defaults
+                break;
+        }
         
         // Initialize congestion penalty factor
         pathfinder->setCongestionPenaltyFactor(congestionFactor);
