@@ -8,6 +8,9 @@
 #include <queue>
 #include <memory>
 #include <chrono>
+#include <map>
+#include <set>
+#include <limits>
 #include "Router.hpp"
 
 // Constructor
@@ -328,35 +331,59 @@ NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& e
     }
 
     // Route from source to each sink
-    std::unordered_set<int> remainingSinks(validSinkNodeIds.begin(), validSinkNodeIds.end());
+    // std::unordered_set<int> remainingSinks(validSinkNodeIds.begin(), validSinkNodeIds.end());
+    // bool allSinksRouted = true;
+
+
+    // for (int sinkId : validSinkNodeIds) {
+    //     // Find path from source to this sink
+    //     std::vector<int> path;
+    //     pathfinder->findPath(sourceNodeId, sinkId, path, congestedNodes, net.id);
+
+    //     if (path.empty() || path.size() < 2) {
+    //         // Failed to find a path to this sink
+    //         allSinksRouted = false;
+    //         continue;
+    //     }
+
+    //     // Convert path to edges and add to NetRoute
+    //     std::vector<std::pair<int, int>> newEdges;
+    //     newEdges.reserve(path.size() - 1);
+    //     for (size_t i = 0; i < path.size() - 1; ++i) {
+    //         newEdges.push_back({path[i], path[i+1]});
+    //     }
+    //     netRoute.addEdges(newEdges);
+
+    //     // Mark this sink as routed
+    //     remainingSinks.erase(sinkId);
+    // }
+
+    std::vector<int> allNodeIDs = net.nodeIDs;
+    std::vector<std::pair<int, int>> rsttEdges = getRSTTEdges(allNodeIDs, nodes);
+    std::unordered_set<int> unroutableSinks;
     bool allSinksRouted = true;
 
-
-    for (int sinkId : validSinkNodeIds) {
-        // Find path from source to this sink
+    for (const auto& pair : rsttEdges) {
         std::vector<int> path;
-        pathfinder->findPath(sourceNodeId, sinkId, path, congestedNodes, net.id);
-
-        if (path.empty() || path.size() < 2) {
-            // Failed to find a path to this sink
-            allSinksRouted = false;
-            continue;
-        }
-
-        // Convert path to edges and add to NetRoute
-        std::vector<std::pair<int, int>> newEdges;
-        newEdges.reserve(path.size() - 1);
-        for (size_t i = 0; i < path.size() - 1; ++i) {
-            newEdges.push_back({path[i], path[i+1]});
-        }
-        netRoute.addEdges(newEdges);
-
-        // Mark this sink as routed
-        remainingSinks.erase(sinkId);
+        pathfinder->findPath(pair.first, pair.second, path, congestedNodes, net.id);
+    if (path.size() < 2) {
+        allSinksRouted = false;
+        unroutableSinks.insert(pair.second);
+        continue;
     }
+    std::vector<std::pair<int, int>> newEdges;
+    for (size_t i = 0; i < path.size() - 1; ++i) {
+        newEdges.emplace_back(path[i], path[i + 1]);
+    }
+    netRoute.addEdges(newEdges);
+}
+
 
     // Set success flag on NetRoute
-    netRoute.isRouted = remainingSinks.empty();
+    // netRoute.isRouted = remainingSinks.empty();
+
+    netRoute.isRouted = (unroutableSinks.empty());
+
 
     // If not all sinks were successfully routed, remove this net from congestedNodes
     if (!netRoute.isRouted) {
@@ -659,4 +686,39 @@ void Router::printRoutingResults() const {
     std::cout << "==========================\n" << std::endl;
 }
 
+int Router::getMedianNode(const std::vector<int>& nodeIDs, const std::vector<Node>& nodes) {
+    std::vector<int> xs, ys;
+    for (int id : nodeIDs) {
+        xs.push_back(nodes[id].beginX);
+        ys.push_back(nodes[id].beginY);
+    }
+    std::sort(xs.begin(), xs.end());
+    std::sort(ys.begin(), ys.end());
+    int medianX = xs[xs.size() / 2];
+    int medianY = ys[ys.size() / 2];
+    double minDist = std::numeric_limits<double>::max();
+    int medianNode = nodeIDs[0];
+
+    for (int id : nodeIDs) {
+        double dist = std::abs(nodes[id].beginX - medianX) + std::abs(nodes[id].beginY - medianY);
+        if (dist < minDist) {
+            minDist = dist;
+            medianNode = id;
+        }
+    }
+    return medianNode;
+}
+
+// Construct RST-T edge list: trunk + spokes
+std::vector<std::pair<int, int>> Router::getRSTTEdges(const std::vector<int>& nodeIDs, const std::vector<Node>& nodes) {
+    int trunk = getMedianNode(nodeIDs, nodes);
+    std::vector<std::pair<int, int>> edges;
+
+    for (int id : nodeIDs) {
+        if (id != trunk) {
+            edges.emplace_back(trunk, id);
+        }
+    }
+    return edges;
+}
 

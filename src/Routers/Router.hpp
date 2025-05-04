@@ -93,6 +93,9 @@ public:
 
     // Validate if an MST edge has a viable path in the device graph
     bool validateMSTEdge(int sourceId, int targetId);
+
+    int getMedianNode(const std::vector<int>& nodeIDs, const std::vector<Node>& nodes);
+    std::vector<std::pair<int, int>> getRSTTEdges(const std::vector<int>& nodeIDs, const std::vector<Node>& nodes);
 };
 
 // Derived class for Steiner Tree routing
