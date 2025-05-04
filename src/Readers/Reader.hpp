@@ -32,7 +32,7 @@ public:
     void verifyNetlist(std::vector<Net>& nets);
 
     // Get RST-T edges for each net
-    void getRSTTEdges(Net& net);
+    void getRSTTEdges(Net& net, std::vector<Node>& nodes, std::vector<std::vector<std::vector<int>>>& coordinateLookup, std::vector<std::vector<int>>& edges);
 };
 
 #endif // READER_HPP

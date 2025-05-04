@@ -131,28 +131,65 @@ bool Reader::parseDevice(std::vector<Node>& nodes, std::vector<std::vector<int>>
     return true;
 }
 
-int getClosestPhysicalNode(int x, int y) {
-    int closestNodeId = -1;
+int getClosestPhysicalNode(int x, int y, std::vector<std::vector<std::vector<int>>>& coordinateLookup, std::vector<std::vector<int>>& edges) {
+    // TODO: Implement logic to find closest physical node to given x,y DONE(?)
+    // TODO: Use coordinateLookup to find the closest node DONE(?)
 
-    // TODO: Implement logic to find closest physical node to given x,y
+    // check if target cell has a physical node
+    if (!coordinateLookup[x][y].empty()) {
+        for (int nodeId : coordinateLookup[x][y]) {
+            if (edges[nodeId].size() > 1) { // has outgoing edges
+                return nodeId;
+            }
+        }
+    }
 
-    return closestNodeId;
+    // if target cell has no physical node, find the closest physical node with ring search, average time complexity O(1)
+    // ring search
+    for (int d = 1; d < 299; d++) {
+        for (int dx = -d; dx <= d; dx++) {
+            int dy = d - std::abs(dx);
+            if (!coordinateLookup[x + dx][y + dy].empty()) {
+                for (int nodeId : coordinateLookup[x + dx][y + dy]) {
+                    if (edges[nodeId].size() > 1) { // has outgoing edges
+                        return nodeId;
+                    }
+                }
+            }
+            if (!coordinateLookup[x + dx][y - dy].empty()) {
+                for (int nodeId : coordinateLookup[x + dx][y - dy]) {
+                    if (edges[nodeId].size() > 1) { // has outgoing edges
+                        return nodeId;
+                    }
+                }
+            }
+        }
+    }
+
+    std::cout << "this shit is fucked, it's not supposed to be possible" << std::endl;
+    return -1; // no physical node found (pretty much impossible)
 }
 
 std::pair<int, int> getMedian(std::vector<int>& nodeIds) {
     std::pair<int,int> medianXY;
     
-    // TODO: implement logic to find median x/y, preferably as fast as possible
+    // TODO: implement logic to find median x/y, preferably in O(1)
 
     return medianXY;
 }
 
 // get edges for RST-T
-void getRSTTEdges(Net& net) {
-    std::vector<std::pair<int, int>> rsttEdges;
+void getRSTTEdges(Net& net, std::vector<Node>& nodes, std::vector<std::vector<std::vector<int>>>& coordinateLookup, std::vector<std::vector<int>>& edges) {
+    std::vector<std::pair<int, int>> rsttEdges; 
     // Determine trunk position
+    std::pair<int, int> trunkXY = getMedian(net.nodeIDs); // trunkXY.first = median x, trunkXY.second = median y
 
     // Mark virtual Steiner Points
+    // For all nodes to the right of the median node, create a virtual steiner point
+    
+    // For all nodes to the left of the median node, create a virtual steiner point
+
+
     // Find physical nodes corresponding to Steiner Points
     // Ensure selected Steiner Point has outgoing edges or we're fucked
     // int SteinerPoint = getClosestPhysicalNode(somex, somey);
