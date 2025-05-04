@@ -305,59 +305,83 @@ bool Router::validateMSTEdge(int sourceId, int targetId) {
 NetRoute Router::routeSingleNet(Net& net, const std::vector<std::vector<int>>& edges, const std::vector<Node>& nodes) {
     NetRoute netRoute;
     netRoute.netId = net.id;
-    
-    // First try routing through the MST edges
-    bool allEdgesRouted = true;
-    int successfulEdges = 0;
-    
-    // Keep track of the most recently routed path for backtracking
-    std::vector<int> lastRoutedPath;
-    
-    for (size_t i = 0; i < net.mst_edges.size(); ++i) {
-        int source = net.mst_edges[i].first;
-        int target = net.mst_edges[i].second;
-        
-        // Find path between the two nodes of this MST edge
-        std::vector<int> path;
-        
-        // If this is the first edge or we have no previous path, use regular routing
-        if (lastRoutedPath.empty()) {
-            pathfinder->findPath(source, target, path, congestedNodes, net.id);
-        } else {
-            // Otherwise use backtracking with the previous path
-            pathfinder->findPath(source, target, path, congestedNodes, net.id, lastRoutedPath);
+    // Validate that all node IDs exist in the graph
+    for (size_t j = 0; j < net.nodeIDs.size(); ++j) {
+        if (existingNodeIds.find(net.nodeIDs[j]) == existingNodeIds.end()) {
+            std::cerr << "Warning: Node ID " << net.nodeIDs[j] << " in net " << net.id 
+                    << " does not exist in the graph. Skipping this node." << std::endl;
         }
-        
-        // Skip if path is empty or too short
-        if (path.size() < 2) {
-            // std::cout << "Path is empty or too short for MST edge between " << source << " and " << target << std::endl;
-            allEdgesRouted = false;
+    }
+
+    // Clear the valid sink node IDs vector (reused across calls)
+    validSinkNodeIds.clear();
+
+    // First node is the source (driver), rest are sinks
+    int sourceNodeId = net.nodeIDs[0];
+
+    // Collect only valid sink node IDs
+    for (size_t j = 1; j < net.nodeIDs.size(); ++j) {
+        int sinkId = net.nodeIDs[j];
+        if (existingNodeIds.find(sinkId) != existingNodeIds.end()) {
+            validSinkNodeIds.push_back(sinkId);
+        }
+    }
+
+    // Route from source to each sink
+    std::unordered_set<int> remainingSinks(validSinkNodeIds.begin(), validSinkNodeIds.end());
+    bool allSinksRouted = true;
+
+
+    for (int sinkId : validSinkNodeIds) {
+        // Find path from source to this sink
+        std::vector<int> path;
+        pathfinder->findPath(sourceNodeId, sinkId, path, congestedNodes, net.id);
+
+        if (path.empty() || path.size() < 2) {
+            // Failed to find a path to this sink
+            allSinksRouted = false;
             continue;
         }
-        
+
         // Convert path to edges and add to NetRoute
         std::vector<std::pair<int, int>> newEdges;
         newEdges.reserve(path.size() - 1);
-        
-        for (size_t j = 0; j < path.size() - 1; ++j) {
-            newEdges.push_back({path[j], path[j+1]});
+        for (size_t i = 0; i < path.size() - 1; ++i) {
+            newEdges.push_back({path[i], path[i+1]});
         }
         netRoute.addEdges(newEdges);
-        successfulEdges++;
-        
-        // Update the last routed path for next iteration
-        lastRoutedPath = path;
+
+        // Mark this sink as routed
+        remainingSinks.erase(sinkId);
     }
-    
-    // If all MST edges were successfully routed, we're done
-    if (allEdgesRouted && successfulEdges > 0) {
-        netRoute.isRouted = true;
-        return netRoute;
+
+    // Set success flag on NetRoute
+    netRoute.isRouted = remainingSinks.empty();
+
+    // If not all sinks were successfully routed, remove this net from congestedNodes
+    if (!netRoute.isRouted) {
+        // Remove this net from all congested nodes
+        for (auto& nodePair : congestedNodes) {
+            nodePair.second.erase(net.id);
+
+            // If a node no longer has any nets, remove it from the map
+            if (nodePair.second.empty()) {
+                // Can't erase while iterating, so mark for removal
+                // We'll handle cleanup in resolveCongestion
+            }
+        }
+
+        // Remove empty entries
+        auto it = congestedNodes.begin();
+        while (it != congestedNodes.end()) {
+            if (it->second.empty()) {
+                it = congestedNodes.erase(it);
+            } else {
+                ++it;
+            }
+        }
     }
-    
-    // Set success flag based on whether any edges were routed
-    netRoute.isRouted = (successfulEdges > 0);
-    
+
     return netRoute;
 }
 

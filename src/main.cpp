@@ -46,11 +46,15 @@ int main(int argc, char* argv[]) {
     std::vector<Net> nets;
     std::map<int, std::vector<int>> x_to_ys;
 
+    // TODO: Define a new datastruct for fast node lookup by x,y coordinate
+    std::vector<std::vector<std::vector<int>>> coordinateLookup;
+    coordinateLookup.resize(108, std::vector<std::vector<int>>(300)); // x = 108 and y = 300 are the maximum bound of all nodes
+
     // Parse input files
     Reader reader = Reader(deviceFile, netlistFile);
 
     auto deviceParseStart = std::chrono::steady_clock::now();
-    reader.parseDevice(nodes, edges);
+    reader.parseDevice(nodes, edges, coordinateLookup);
     auto deviceParseEnd = std::chrono::steady_clock::now();
     std::cout << "Nodes: " << nodes.size() << ", Edges: " << edges.size() << std::endl;
     
@@ -79,7 +83,6 @@ int main(int argc, char* argv[]) {
     
     // Create router 
     Router router;
-    // SteinerTreeRouter stRouter;
     
     // Extract design number from netlist filename and set in router
     int designNumber = extractDesignNumber(netlistFile);
@@ -110,12 +113,11 @@ int main(int argc, char* argv[]) {
         
     // Print routing results
     router.printRoutingResults();
-    // stRouter.printRoutingResults();
+
     
     // Write output to file
     Writer writer(outputFile);
     writer.setRoutingResults(&router.getRoutingResults());
-    // writer.setRoutingResults(&stRouter.getRoutingResults());
     writer.setOriginalNets(&nets);
     writer.writeOutput();
     
@@ -124,7 +126,6 @@ int main(int argc, char* argv[]) {
         std::cout << "Cleaning up resources..." << std::endl;
     }
     router.clearAll();
-    // stRouter.clearAll();
     
     auto totalEnd = std::chrono::steady_clock::now();
     std::cout << "Total program time: " << std::chrono::duration_cast<std::chrono::seconds>(

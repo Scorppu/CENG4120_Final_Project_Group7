@@ -17,7 +17,7 @@ public:
     Reader(std::string devicePath, std::string netlistPath);
 
     // Parse the device file and return the number of nodes
-    virtual bool parseDevice(std::vector<Node>& nodes, std::vector<std::vector<int>>& edges);
+    virtual bool parseDevice(std::vector<Node>& nodes, std::vector<std::vector<int>>& edges, std::vector<std::vector<std::vector<int>>>& coordinateLookup);
 
     // Parse the netlist file
     virtual bool parseNetlist(std::vector<Net>& nets, std::vector<Node>& nodes, std::map<int, std::vector<int>>& x_to_ys);
@@ -31,8 +31,8 @@ public:
     // Verify netlist parsing results
     void verifyNetlist(std::vector<Net>& nets);
 
-    // Get MST edges for a net
-    std::vector<std::pair<int, int>> getMSTEdges(Net& net, std::vector<Node>& nodes);
+    // Get RST-T edges for each net
+    void getRSTTEdges(Net& net);
 };
 
 #endif // READER_HPP

@@ -13,7 +13,7 @@ struct Node {
     int id;
     std::string type;
     int length;
-    int beginX, beginY, endX, endY;
+    int beginX, beginY, endX, endY; // Bounds: X(0, 107) Y(0, 299)
     std::string name;
 };
 
@@ -25,8 +25,8 @@ struct Net {
     int id;
     std::string name;
     std::vector<int> nodeIDs;
-    std::vector<std::pair<int, int>> mst_edges;
-    std::pair<std::pair<int, int>, std::pair<int, int>> max_min_xy;
+    std::pair<std::pair<int, int>, std::pair<int, int>> max_min_xy; // used for bounding box
+    std::vector<std::pair<int,int>> rsttEdges; // used to store edges for RST-T
 };
 
 // Simpler alternative to RoutingTree
