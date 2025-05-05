@@ -62,7 +62,7 @@ int main(int argc, char* argv[]) {
         deviceParseEnd - deviceParseStart).count() << "s" << std::endl;
 
     auto netlistParseStart = std::chrono::steady_clock::now();
-    reader.parseNetlist(nets, nodes, x_to_ys);
+    reader.parseNetlist(nets, nodes, x_to_ys, coordinateLookup, edges);
     auto netlistParseEnd = std::chrono::steady_clock::now();
     
     std::cout << "Netlist parsing: " << std::chrono::duration_cast<std::chrono::seconds>(

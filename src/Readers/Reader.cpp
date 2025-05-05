@@ -170,41 +170,122 @@ int getClosestPhysicalNode(int x, int y, std::vector<std::vector<std::vector<int
     return -1; // no physical node found (pretty much impossible)
 }
 
-std::pair<int, int> getMedian(std::vector<int>& nodeIds) {
-    std::pair<int,int> medianXY;
-    
-    // TODO: implement logic to find median x/y, preferably in O(1)
-
-    return medianXY;
-}
 
 // get edges for RST-T
-void getRSTTEdges(Net& net, std::vector<Node>& nodes, std::vector<std::vector<std::vector<int>>>& coordinateLookup, std::vector<std::vector<int>>& edges) {
-    std::vector<std::pair<int, int>> rsttEdges; 
-    // Determine trunk position
-    std::pair<int, int> trunkXY = getMedian(net.nodeIDs); // trunkXY.first = median x, trunkXY.second = median y
+void Reader::getRSTTEdges(Net& net, std::vector<Node>& nodes, std::vector<std::vector<std::vector<int>>>& coordinateLookup, std::vector<std::vector<int>>& edges) {
+    // Select trunk node (source node)
+    Node& trunk = nodes[net.nodeIDs[0]];
 
-    // Mark virtual Steiner Points
-    // For all nodes to the right of the median node, create a virtual steiner point
+    // Create indices for nodes to sort them without modifying original array
+    std::vector<size_t> nodeIndices(net.nodeIDs.size());
+    for (size_t i = 0; i < net.nodeIDs.size(); ++i) {
+        nodeIndices[i] = i;
+    }
     
-    // For all nodes to the left of the median node, create a virtual steiner point
+    // Sort indices simply by X coordinate
+    std::sort(nodeIndices.begin(), nodeIndices.end(), 
+        [&nodes, &net](size_t a, size_t b) {
+            return nodes[net.nodeIDs[a]].beginX < nodes[net.nodeIDs[b]].beginX; 
+        }
+    );
+
+    // Find trunk index in sorted array
+    size_t indexOfTrunk = 0;
+    for (size_t i = 0; i < nodeIndices.size(); ++i) {
+        if (net.nodeIDs[nodeIndices[i]] == trunk.id) {
+            indexOfTrunk = i;
+            break;
+        }
+    }
+
+    // Creates Steiner Points and maps them to physical nodes
+    std::vector<int> SteinerPoints;
+    // Create Steiner points for all nodes except trunk
+    for (size_t i = 0; i < nodeIndices.size(); ++i) {
+        if (net.nodeIDs[nodeIndices[i]] == trunk.id) {
+            continue;
+        } else {
+            SteinerPoints.push_back(getClosestPhysicalNode(nodes[net.nodeIDs[nodeIndices[i]]].beginX, trunk.beginY, coordinateLookup, edges));
+        }
+    }
+    
+    // std::cout << "Net's SteinerPoints: ";
+    // for (const auto& point : SteinerPoints) {
+    //     std::cout << point << " ";
+    // }
+    // std::cout << std::endl;
+
+    // Connect trunk to Steiner Points - left and right
+    if (indexOfTrunk > 0) {
+        // Connect to left side
+        net.rsttEdges.push_back(std::make_pair(trunk.id, SteinerPoints[indexOfTrunk - 1]));
+    }
+    
+    if (indexOfTrunk < nodeIndices.size() - 1) {
+        // Connect to right side
+        net.rsttEdges.push_back(std::make_pair(trunk.id, SteinerPoints[indexOfTrunk]));
+    }
+
+    // Connect left side Steiner points (flowing toward trunk)
+    for (int i = indexOfTrunk - 1; i > 0; --i) {
+        // Connect current steiner point to the next one (closer to trunk)
+        if (SteinerPoints[i] != SteinerPoints[i - 1]) { // Prevent self-loops
+            net.rsttEdges.push_back(std::make_pair(SteinerPoints[i], SteinerPoints[i - 1]));
+        }
+    }
+
+    // Connect right side Steiner points (flowing away from trunk)
+    // for (int i = indexOfTrunk + 1; i < nodeIndices.size() - 2; ++i) {
+    //     if (SteinerPoints[i] != SteinerPoints[i + 1]) { // Prevent self-loops
+    //         net.rsttEdges.push_back(std::make_pair(SteinerPoints[i], SteinerPoints[i + 1]));
+    //     }
+    // }
+
+    for (size_t i = indexOfTrunk; i < nodeIndices.size() - 1; ++i) {
+        size_t steinerIdx = i - (i > indexOfTrunk ? 1 : 0);
+        size_t nextSteinerIdx = i + 1 - (i + 1 > indexOfTrunk ? 1 : 0);
+        
+        if (steinerIdx < SteinerPoints.size() && nextSteinerIdx < SteinerPoints.size()) {
+            if (SteinerPoints[steinerIdx] != SteinerPoints[nextSteinerIdx]) { // Prevent self-loops
+                net.rsttEdges.push_back(std::make_pair(SteinerPoints[steinerIdx], SteinerPoints[nextSteinerIdx]));
+            }
+        }
+    }
 
 
-    // Find physical nodes corresponding to Steiner Points
-    // Ensure selected Steiner Point has outgoing edges or we're fucked
-    // int SteinerPoint = getClosestPhysicalNode(somex, somey);
+    // Connect each node to its corresponding Steiner point
+    for (size_t i = 0; i < nodeIndices.size(); ++i) {
+        if (net.nodeIDs[nodeIndices[i]] == trunk.id) {
+            continue; // Skip trunk
+        }
+        
+        // Calculate steiner point index
+        size_t steinerIdx = i;
+        if (i > indexOfTrunk) steinerIdx--;
+        
+        if (steinerIdx < SteinerPoints.size()) {
+            net.rsttEdges.push_back(std::make_pair(SteinerPoints[steinerIdx], net.nodeIDs[nodeIndices[i]]));
+        }
+    }
 
-    // Process upper half
-    // Process lower half
+    // Remove duplicate edges
+    std::sort(net.rsttEdges.begin(), net.rsttEdges.end());
+    net.rsttEdges.erase(std::unique(net.rsttEdges.begin(), net.rsttEdges.end()), net.rsttEdges.end());
+
+    // Debugging
+    // std::cout << "RST-T edges for net " << net.name << ":" << std::endl;
+    // for (const auto& edge : net.rsttEdges) {
+    //     std::cout << "(" << edge.first << ", " << edge.second << ")" << std::endl;
+    // }
 
     // Refine (link nodes to closest stem ? toStemdist < toTrunkdist)
-    // Change edges to take source node as root
+    // TODO: Implement this
 }
 
 
 
 // Parse the netlist file
-bool Reader::parseNetlist(std::vector<Net>& nets, std::vector<Node>& nodes, std::map<int, std::vector<int>>& x_to_ys) {
+bool Reader::parseNetlist(std::vector<Net>& nets, std::vector<Node>& nodes, std::map<int, std::vector<int>>& x_to_ys, std::vector<std::vector<std::vector<int>>>& coordinateLookup, std::vector<std::vector<int>>& edges) {
     std::ifstream netlistFile(netlistPath);
     if (!netlistFile.is_open()) {
         std::cerr << "Failed to open netlist file: " << netlistPath << std::endl;
@@ -266,8 +347,19 @@ bool Reader::parseNetlist(std::vector<Net>& nets, std::vector<Node>& nodes, std:
         for (auto& p1 : x_to_ys) {
             std::sort(p1.second.begin(), p1.second.end());
         }
+
+        
+        if (net.nodeIDs.size() > 2) {
+            std::cout << "getting RST-T edges for net " << net.name << std::endl;
+            getRSTTEdges(net, nodes, coordinateLookup, edges);
+        } else {
+            std::cout << "net " << net.name << " has less than 3 nodes, skipping RST-T edges" << std::endl;
+            net.rsttEdges.push_back(std::make_pair(net.nodeIDs[0], net.nodeIDs[1]));
+        }
     }
 
+
+    
     netlistFile.close();
     return true;
 }

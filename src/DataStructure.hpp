@@ -17,9 +17,6 @@ struct Node {
     std::string name;
 };
 
-struct SteinerNode : Node {
-    bool isSteiner = true;
-};
 
 struct Net {
     int id;
